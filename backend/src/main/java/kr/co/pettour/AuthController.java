@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,7 +40,6 @@ class AuthController {
     private static final Logger LOG = LoggerFactory.getLogger(AuthController.class);
 
     record SessionInfo(boolean enabled, String loginOrigin, MemberStore.Member user, boolean dogSetupPending) {}
-    record DogVisibility(boolean publicProfile) {}
 
     private final KakaoLoginClient kakao;
     private final MemberStore members;
@@ -82,11 +82,6 @@ class AuthController {
     @GetMapping("/dogs")
     List<MemberStore.DogProfile> dogs(HttpServletRequest request) {
         return members.dogs(requireMember(request));
-    }
-
-    @GetMapping("/dogs/{id}/public")
-    MemberStore.PublicDog publicDog(@PathVariable String id) {
-        return members.publicDog(id);
     }
 
     @PostMapping(value = "/dogs", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -135,15 +130,14 @@ class AuthController {
         }
     }
 
-    @PutMapping(value = "/dogs/{id}/visibility", consumes = MediaType.APPLICATION_JSON_VALUE)
-    MemberStore.DogProfile setDogVisibility(@PathVariable String id, @RequestBody DogVisibility visibility,
-                                           HttpServletRequest request) {
+    @DeleteMapping("/dogs/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteDog(@PathVariable String id, HttpServletRequest request) {
         protect(request.getHeader("X-Auth-Client"));
-        try {
-            return members.setDogVisibility(requireMember(request), id, visibility.publicProfile());
-        } catch (IOException ex) {
-            LOG.warn("Could not change dog profile visibility ({})", ex.getClass().getSimpleName());
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "공개 설정을 저장하지 못했어요.");
+        try { members.deleteDog(requireMember(request), id); }
+        catch (IOException ex) {
+            LOG.warn("Could not delete a dog profile ({})", ex.getClass().getSimpleName());
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "반려견 정보를 삭제하지 못했어요. 다시 시도해주세요.");
         }
     }
 

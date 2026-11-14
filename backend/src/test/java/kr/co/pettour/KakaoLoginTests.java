@@ -179,17 +179,16 @@ class KakaoLoginTests {
                 Map.of("id", member.id(), "nickname", member.nickname(), "dogs", List.of(legacyDog, unnamedDog)))));
         var reopened = new MemberStore(mapper, legacyFile.toString());
         assertEquals(member, reopened.signIn(user).member());
-        assertEquals(new MemberStore.DogProfile(dog.id(), "구름", 25, true), reopened.dog(member, dog.id()));
-        assertEquals(new MemberStore.PublicDog("구름"), reopened.publicDog(dog.id()));
-        assertEquals(new MemberStore.DogProfile(dog.id(), "하늘", 35, true),
+        assertEquals(new MemberStore.DogProfile(dog.id(), "구름", 25), reopened.dog(member, dog.id()));
+        assertEquals(new MemberStore.DogProfile(dog.id(), "하늘", 35),
                 reopened.saveDog(member, dog.id(), new MemberStore.DogInput("하늘", 35), false));
-        assertEquals(new MemberStore.PublicDog("하늘"), reopened.publicDog(dog.id()));
         assertNull(reopened.dog(member, "unnamed-dog").name());
-        assertEquals(new MemberStore.DogProfile("unnamed-dog", "노을", 25, false),
+        assertEquals(new MemberStore.DogProfile("unnamed-dog", "노을", 25),
                 reopened.saveDog(member, "unnamed-dog", new MemberStore.DogInput("노을", 25), false));
         var updated = mapper.readTree(Files.readString(legacyFile)).path(Long.toString(KAKAO_USER_ID)).path("dogs").get(0);
         assertFalse(updated.has("size"));
         assertFalse(updated.has("age"));
+        assertFalse(updated.has("publicProfile"));
     }
 
     @Test void checkedSkipHidesTheReminderAcrossLoginsAndExistingSettingsExpire() throws Exception {
@@ -248,7 +247,7 @@ class KakaoLoginTests {
         var dog = json(201, send("POST", dogs, owner, input, true));
         String id = dog.path("id").asString();
         assertFalse(session(owner).path("dogSetupPending").asBoolean());
-        assertFalse(dog.path("publicProfile").asBoolean());
+        assertFalse(dog.has("publicProfile"));
         assertEquals("보리", dog.path("name").asString());
         assertFalse(dog.has("age"));
         assertFalse(dog.has("size"));
@@ -324,7 +323,7 @@ class KakaoLoginTests {
         assertEquals(id, updated.path("id").asString());
         assertEquals("보리별", updated.path("name").asString());
         assertEquals(20, updated.path("walkMinutes").asInt());
-        assertFalse(updated.path("publicProfile").asBoolean());
+        assertFalse(updated.has("publicProfile"));
         assertEquals(0, json(200, send("GET", filtered, owner, null, false)).path("total").asInt());
         assertEquals(404, send("GET", dogs + "/" + id + "/public", neighbor, null, false).statusCode());
 
@@ -337,6 +336,28 @@ class KakaoLoginTests {
         var reopened = new MemberStore(mapper, dataDir.resolve("members.json").toString());
         var savedMember = reopened.signIn(new KakaoLoginClient.User(ownerId, "새 보호자 닉네임")).member();
         assertEquals(updated, mapper.valueToTree(reopened.dog(savedMember, id)));
+    }
+
+    @Test void dogDeletionRequiresOwnerAndRemovedPublicRoutesStayUnavailable() throws Exception {
+        String owner = signIn(801212L,"삭제테스트소유자");
+        String neighbor = signIn(801213L,"다른삭제소유자");
+        String path = "/api/auth/dogs";
+        var dog = json(201,send("POST",path,owner,Map.of("name","보리","walkMinutes",20),true));
+        String id = dog.path("id").asString();
+        var second = json(201,send("POST",path,owner,Map.of("name","두부","walkMinutes",30),true));
+        assertEquals(401,send("DELETE",path+"/"+id,null,null,true).statusCode());
+        assertEquals(403,send("DELETE",path+"/"+id,owner,null,false).statusCode());
+        assertEquals(404,send("DELETE",path+"/"+id,neighbor,null,true).statusCode());
+        assertEquals(404,send("GET",path+"/"+id+"/public",owner,null,false).statusCode());
+        assertEquals(404,send("PUT",path+"/"+id+"/visibility",owner,Map.of("publicProfile",true),true).statusCode());
+        assertEquals(204,send("DELETE",path+"/"+id,owner,null,true).statusCode());
+        var remaining = json(200,send("GET",path,owner,null,false));
+        assertEquals(1,remaining.size()); assertEquals(second.path("id"),remaining.get(0).path("id"));
+        assertEquals(404,send("DELETE",path+"/"+id,owner,null,true).statusCode());
+        assertEquals(204,send("DELETE",path+"/"+second.path("id").asString(),owner,null,true).statusCode());
+        assertEquals(0,json(200,send("GET",path,owner,null,false)).size());
+        var reopened = new MemberStore(mapper,dataDir.resolve("members.json").toString());
+        assertTrue(reopened.dogs(reopened.signIn(new KakaoLoginClient.User(801212L,"삭제테스트소유자")).member()).isEmpty());
     }
 
     private String postCourse(String cookie, Map<String, Object> body) throws Exception {

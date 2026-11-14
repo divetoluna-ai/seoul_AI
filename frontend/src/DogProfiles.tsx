@@ -1,56 +1,36 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { accountApi, dogProfileLabel, type DogInput, type DogProfile, type PublicDog } from './dog-profiles';
+import { useState, type FormEvent } from 'react';
+import { dogProfileLabel, type DogInput, type DogProfile } from './dog-profiles';
 
-export function PublicDogProfile({ id }: { id: string }) {
-  const [dog, setDog] = useState<PublicDog | null>(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    const abort = new AbortController();
-    accountApi<PublicDog>(`/dogs/${id}/public`, 'GET', undefined, abort.signal).then(setDog)
-      .catch(error => { if (!abort.signal.aborted) setError(error.message); });
-    return () => abort.abort();
-  }, [id]);
-  if (error) return <p className="account-feedback" role="alert">{error}</p>;
-  if (!dog) return <p role="status">프로필을 불러오고 있어요…</p>;
-  return <p><strong>{dog.name}</strong></p>;
-}
-
-export default function DogProfiles({ dogs, onSave, onVisibilityChange }: {
+export default function DogProfiles({ dogs, onSave, onDelete }: {
   dogs: DogProfile[];
   onSave: (id: string, dog: DogInput) => Promise<void>;
-  onVisibilityChange: (id: string, publicProfile: boolean) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState('');
-
-  function edit(dog?: DogProfile) {
-    setFeedback('');
-    setEditing(dog?.id ?? '');
-  }
-  async function changeVisibility(dog: DogProfile) {
-    setBusy(true);
-    setFeedback('');
-    try {
-      await onVisibilityChange(dog.id, !dog.publicProfile);
-      setFeedback('공개 설정을 저장했어요.');
-    } catch (error) {
-      setFeedback((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  function edit(dog?: DogProfile) { setFeedback(''); setDeleting(null); setEditing(dog?.id ?? ''); }
+  async function remove(dog: DogProfile) {
+    if (busy) return;
+    setBusy(true); setFeedback('');
+    try { await onDelete(dog.id); setDeleting(null); setFeedback('반려견 정보를 삭제했어요.'); }
+    catch (error) { setFeedback((error as Error).message); }
+    finally { setBusy(false); }
   }
   return <section className="dog-profiles" aria-label="내 반려견 프로필">
     {feedback && <p role="status">{feedback}</p>}
     {editing === null ? <>
+      {!dogs.length && <p>등록된 반려견 정보가 없어요.</p>}
       {dogs.length > 0 && <ul className="dog-list">{dogs.map(dog => <li key={dog.id}>
-        <div><strong>{dogProfileLabel(dog)}</strong>{dog.name && <small>{dog.publicProfile ? '이름 공개' : '비공개'}</small>}</div>
-        <button type="button" className="course-outline" disabled={busy} onClick={() => edit(dog)} aria-label={`${dogProfileLabel(dog)} 수정`}>수정</button>
-        {dog.name && <>
-          <button type="button" className="course-outline" disabled={busy} onClick={() => void changeVisibility(dog)}
-            aria-label={`${dog.name} ${dog.publicProfile ? '비공개로 전환' : '이름 공개'}`}>{dog.publicProfile ? '비공개로 전환' : '이름 공개'}</button>
-          {dog.publicProfile && <a className="course-outline" href={`#dog/${dog.id}`}>공개 프로필</a>}
-        </>}
+        <div><strong>{dogProfileLabel(dog)}</strong></div>
+        <button type="button" className="course-outline" disabled={busy} onClick={() => edit(dog)} aria-label={dogProfileLabel(dog) + ' 수정'}>수정</button>
+        {deleting !== dog.id ? <button type="button" className="course-outline dog-delete-button" disabled={busy} onClick={() => { setFeedback(''); setDeleting(dog.id); }} aria-label={(dog.name || '반려견') + ' 정보 삭제'}>삭제</button>
+          : <div className="dog-delete-confirm" role="group" aria-label={(dog.name || '반려견') + ' 삭제 확인'}>
+            <p>{dog.name || '이 반려견'}의 이름과 산책 조건을 삭제할까요? 삭제한 정보는 복구할 수 없어요.</p>
+            <button type="button" className="course-outline dog-delete-button" disabled={busy} onClick={() => void remove(dog)}>{busy ? '삭제 중…' : '삭제 확인'}</button>
+            <button type="button" className="course-outline" disabled={busy} onClick={() => setDeleting(null)}>취소</button>
+          </div>}
       </li>)}</ul>}
       <button type="button" className="primary-button" disabled={busy} onClick={() => edit()}>반려견 등록</button>
     </> : <DogProfileForm key={editing} dog={dogs.find(item => item.id === editing)}
