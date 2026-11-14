@@ -1,0 +1,5 @@
+Golden Retriever / Mm Project by a955087
+Source: https://sketchfab.com/3d-models/412544b36a81481c879b0420c513da6c
+License: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/
+Public GLB redistributed by AllenAI Objaverse: https://huggingface.co/datasets/allenai/objaverse
+Modifications: normalized size/orientation, custom quadruped skinning and animation, fitted clothing.

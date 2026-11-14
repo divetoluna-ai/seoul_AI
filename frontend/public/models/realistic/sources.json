@@ -1,0 +1,36 @@
+{
+  "license": "CC0-1.0",
+  "origin": "Grab3D, AI-assisted (Meshy), cleaned in Blender",
+  "models": [
+    {
+      "id": "dog",
+      "source": "https://grab3d.com/models/animals/dog/",
+      "sha256": "d3b6e308c4fb5272c07111b5c63a72ea2c74aa4ab88edcc6fb7be07eba42d82b",
+      "bytes": 15998932
+    },
+    {
+      "id": "cat",
+      "source": "https://grab3d.com/models/animals/cat/",
+      "sha256": "1f6af2bf9d0cb49765c7fd681f9d94cef0f014ddb1a000a2cb5bcc8dd3a8140c",
+      "bytes": 30508712
+    },
+    {
+      "id": "puppy",
+      "source": "https://grab3d.com/models/animals/puppy/",
+      "sha256": "c8eb3d7eaf0e49c7d257b75b02f950c16a4b7ba0c8cdcb9cadbb7c157dee3343",
+      "bytes": 29210420
+    },
+    {
+      "id": "kitten",
+      "source": "https://grab3d.com/models/animals/kitten/",
+      "sha256": "68b7ea10ca5cf15a9cf18302e9662f1543af4429b91d0c215987f19448798d04",
+      "bytes": 31357780
+    },
+    {
+      "id": "sphynx-cat",
+      "source": "https://grab3d.com/models/animals/sphynx-cat/",
+      "sha256": "4d41e896f59429b91c91fc79e37360f8f9c6aee1cbf0f69aa820d8e20032cafc",
+      "bytes": 19465844
+    }
+  ]
+}
