@@ -26,11 +26,11 @@ class MemberStore {
 
     record Member(String id, String nickname) {}
     record SignIn(Member member, boolean showDogSetup) {}
-    enum DogSize { SMALL, MEDIUM, LARGE }
-    record DogInput(String name, DogSize size, Integer age, Integer walkMinutes) {}
-    @JsonIgnoreProperties({"avoidStairs", "preferShade", "preferQuiet"})
-    record DogProfile(String id, String name, DogSize size, Integer age, int walkMinutes, boolean publicProfile) {}
-    record PublicDog(String name, DogSize size) {}
+    @JsonIgnoreProperties({"age", "size"})
+    record DogInput(String name, Integer walkMinutes) {}
+    @JsonIgnoreProperties({"age", "size", "avoidStairs", "preferShade", "preferQuiet"})
+    record DogProfile(String id, String name, Integer walkMinutes, boolean publicProfile) {}
+    record PublicDog(String name) {}
     record Account(String id, String nickname, List<DogProfile> dogs, Instant dogSetupHiddenUntil) {
         Account {
             dogs = dogs == null ? List.of() : List.copyOf(dogs);
@@ -89,8 +89,8 @@ class MemberStore {
 
     synchronized PublicDog publicDog(String id) {
         return members.values().stream().flatMap(account -> account.dogs().stream())
-                .filter(dog -> dog.id().equals(id) && dog.publicProfile())
-                .map(dog -> new PublicDog(dog.name(), dog.size()))
+                .filter(dog -> dog.id().equals(id) && dog.publicProfile() && dog.name() != null)
+                .map(dog -> new PublicDog(dog.name()))
                 .findFirst().orElseThrow(MemberStore::dogNotFound);
     }
 
@@ -98,13 +98,14 @@ class MemberStore {
         var entry = owner(member);
         var existing = id == null ? null : dog(member, id);
         String name = input.name() == null ? "" : input.name().strip();
-        if (name.isEmpty() || name.length() > 20 || input.size() == null
-                || (input.age() != null && (input.age() < 0 || input.age() > 40))
-                || input.walkMinutes() == null || input.walkMinutes() < 1 || input.walkMinutes() > 600) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "반려견 이름, 크기, 나이와 산책 시간을 확인해주세요.");
+        if (name.isEmpty() || name.length() > 20) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "반려견 이름은 1~20자로 입력해주세요.");
         }
-        var dog = new DogProfile(existing == null ? UUID.randomUUID().toString() : existing.id(), name,
-                input.size(), input.age(), input.walkMinutes(), existing != null && existing.publicProfile());
+        if (!WalkRecommendation.validMinutes(input.walkMinutes())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "선호 산책 시간은 1~600분으로 입력해주세요.");
+        }
+        var dog = new DogProfile(existing == null ? UUID.randomUUID().toString() : existing.id(),
+                name, input.walkMinutes(), existing != null && existing.publicProfile());
         return saveDog(entry, existing, dog, hideSetup);
     }
 
@@ -117,8 +118,10 @@ class MemberStore {
     synchronized DogProfile setDogVisibility(Member member, String id, boolean publicProfile) throws IOException {
         var entry = owner(member);
         var dog = dog(member, id);
+        if (publicProfile && dog.name() == null)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "공개할 반려견 이름이 없어요.");
         if (dog.publicProfile() == publicProfile) return dog;
-        var updated = new DogProfile(dog.id(), dog.name(), dog.size(), dog.age(), dog.walkMinutes(), publicProfile);
+        var updated = new DogProfile(dog.id(), dog.name(), dog.walkMinutes(), publicProfile);
         return saveDog(entry, dog, updated, false);
     }
 

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Heart, Info, LoaderCircle, MapPin, PawPrint, Pencil, Plus, Route, Search, Share2, Trash2, X } from 'lucide-react';
 import { categoryLabel, mapUrl, photoCredit, photoPage, safeImage, type Place, type Region } from './lib';
-import { communityApi as request, communityDate, courseIdFromHash, courseInput, courseShareUrl, type CourseView, type CourseFeed, type WalkConditions } from './community-api';
+import { communityApi as request, communityDate, courseIdFromHash, courseInput, courseShareUrl, type CourseView, type CourseFeed, type WalkConditions, type WalkAssessment, type WalkOrder } from './community-api';
 import { MAX_STOPS } from './trip';
 import CoursePreview from './CoursePreview';
 import './community.css';
 import { useMemberProfile } from './MemberProfile';
-import { dogSizes, type DogProfile } from './dog-profiles';
+import { dogProfileLabel, type DogProfile } from './dog-profiles';
 import WalkConditionsFields from './WalkConditionsFields';
 
 function Modal({ title, close, children, wide = false }: { title: string; close: () => void; children: ReactNode; wide?: boolean }) {
@@ -19,6 +19,14 @@ function Modal({ title, close, children, wide = false }: { title: string; close:
   </dialog>;
 }
 function ErrorMessage({ message }: { message: string }) { return message ? <p className="course-error" role="alert"><Info size={16}/>{message}</p> : null; }
+function WalkRecommendationSummary({ assessment }: { assessment: WalkAssessment }) {
+  return <div className="course-walk-summary course-recommendation">
+    <strong>{assessment.time === 'UNKNOWN' ? '시간 정보 부족' : `예상 산책 ${assessment.minutes}분`}</strong>
+    <p>{assessment.time === 'WITHIN_LIMIT' ? `설정한 최대 산책 시간 ${assessment.maxMinutes}분 이내예요.`
+      : assessment.time === 'UNKNOWN' ? '예상 소요 시간이 없어 시간 조건을 확인할 수 없어요.'
+      : '최대 산책 시간이 설정되면 시간 조건을 확인할 수 있어요.'}</p>
+  </div>;
+}
 function CourseStops({ stops, onChange }: { stops: Place[]; onChange?: (p: Place[]) => void }) {
   const move = (i: number, direction: number) => {
     const next = [...stops]; [next[i], next[i + direction]] = [next[i + direction], next[i]]; onChange?.(next);
@@ -42,6 +50,14 @@ export default function Community({ loggedIn, regions, tripStops, initialRegion,
   const [mine, setMine] = useState(false);
   const [dogId, setDogId] = useState('');
   const chosenDog = dogs?.find(item => item.id === dogId);
+  const [walkTimeDraft, setWalkTimeDraft] = useState<string | null>(null);
+  const [maxWalkMinutes, setMaxWalkMinutes] = useState<number | null>(null);
+  const [timeUnknown, setTimeUnknown] = useState(false);
+  const [walkOrder, setWalkOrder] = useState<WalkOrder>('SHORTER');
+  const savedWalkMinutes = chosenDog?.walkMinutes;
+  const preferredWalkMinutes = savedWalkMinutes != null && Number.isInteger(savedWalkMinutes)
+    && savedWalkMinutes >= 1 && savedWalkMinutes <= 600 ? savedWalkMinutes : null;
+  const effectiveWalkOrder = preferredWalkMinutes === null ? 'SHORTER' : walkOrder;
   const [page, setPage] = useState(1);
   const [feed, setFeed] = useState<CourseFeed | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,19 +92,24 @@ export default function Community({ loggedIn, regions, tripStops, initialRegion,
   useEffect(() => {
     const abort = new AbortController(); setLoading(true); setFeedError('');
     const params = new URLSearchParams({ region, keyword, sort, mine: String(mine), page: String(page) });
-    if (chosenDog) params.set('dog', chosenDog.id);
+    if (chosenDog) {
+      params.set('dog', chosenDog.id);
+      params.set('walkOrder', effectiveWalkOrder);
+      if (maxWalkMinutes != null) params.set('maxWalkMinutes', String(maxWalkMinutes));
+      if (timeUnknown) params.set('timeUnknown', 'true');
+    }
     request<CourseFeed>(`/courses?${params}`, 'GET', undefined, abort.signal)
       .then(data => { if (!abort.signal.aborted) setFeed(data); })
       .catch(e => {
         if (abort.signal.aborted) return;
         if (chosenDog && (e.status === 401 || e.status === 404)) {
-          setDogId(''); setPage(1); setToast('반려견 추천을 적용할 수 없어 전체 코스를 표시해요.');
+          selectDog(''); setToast('반려견 추천을 적용할 수 없어 전체 코스를 표시해요.');
         } else setFeedError(e.message);
       }).finally(() => { if (!abort.signal.aborted) setLoading(false); });
     return () => abort.abort();
-  }, [region, keyword, sort, mine, page, revision, chosenDog]);
+  }, [region, keyword, sort, mine, page, revision, chosenDog, maxWalkMinutes, timeUnknown, effectiveWalkOrder]);
   useEffect(() => {
-    if (dogId && !chosenDog) { setDogId(''); setPage(1); }
+    if (dogId && !chosenDog) selectDog('');
   }, [dogId, chosenDog]);
   useEffect(() => {
     if (!selected) { setDetail(null); return; }
@@ -105,6 +126,20 @@ export default function Community({ loggedIn, regions, tripStops, initialRegion,
   }, [shareRequest, profileReady]);
 
   function closeCourse() { if (busy) return; setSelected(''); window.location.hash = 'community'; setError(''); }
+  function selectDog(id: string) {
+    setDogId(id);
+    setWalkTimeDraft(null);
+    setMaxWalkMinutes(null);
+    setTimeUnknown(false);
+    setPage(1);
+  }
+  function applyWalkTime(event: FormEvent) {
+    event.preventDefault();
+    setMaxWalkMinutes(walkTimeDraft ? Number(walkTimeDraft) : null);
+    if (!walkTimeDraft) setWalkTimeDraft(null);
+    setTimeUnknown(false);
+    setPage(1);
+  }
   function openCourse(id: string) { setSelected(id); window.location.hash = `community/course/${id}`; setError(''); setDeleteConfirm(false); setReplaceConfirm(false); }
   function withProfile(action: () => void) { if (!loggedIn) { setError('로그인 후 공유·좋아요를 이용할 수 있어요.'); return; } ensureProfile(action); }
   async function run(action: () => Promise<void>) {
@@ -122,7 +157,7 @@ export default function Community({ loggedIn, regions, tripStops, initialRegion,
     await run(async () => {
       const body = { ...courseInput(form.title, form.content, form.region, composeStops), walk };
       const result = await request<CourseView>(editing ? `/courses/${editing}` : '/courses', editing ? 'PUT' : 'POST', body);
-      setComposer(false); setDetail(result); setPage(1); setRegion(''); setKeyword(''); setDraft(''); setMine(false); setDogId(''); setRevision(n => n + 1);
+      setComposer(false); setDetail(result); setRegion(''); setKeyword(''); setDraft(''); setMine(false); selectDog(''); setRevision(n => n + 1);
       openCourse(result.course.id); setToast(editing ? '공유 코스를 수정했어요.' : '우리의 코스를 공유했어요.');
     });
   }
@@ -159,26 +194,62 @@ export default function Community({ loggedIn, regions, tripStops, initialRegion,
       {!loggedIn && <p className="course-session-note">코스는 누구나 볼 수 있어요. 공유·좋아요는 로그인 후 이용해주세요.</p>}
       <div className="course-current-plan"><Route size={22}/><div><strong>나의 여행 코스 <b>{tripStops.length}곳</b></strong><p>{tripStops.length ? tripStops.map(p => p.name).join(' → ') : '장소 둘러보기에서 방문할 곳을 순서대로 담아주세요.'}</p></div><button onClick={tripStops.length >= 2 ? startCreate : onBrowse} disabled={!profileReady || (tripStops.length >= 2 && !loggedIn)}>{tripStops.length >= 2 ? <><Share2 size={15}/> 이 코스 공유하기</> : <><Plus size={15}/> 장소 고르기</>}</button></div>
       <form className="course-search" onSubmit={e => { e.preventDefault(); setKeyword(draft.trim()); setPage(1); }}><Search size={19}/><input aria-label="공유 코스 검색" placeholder="코스 이름, 장소, 여행 이야기를 찾아보세요" maxLength={60} value={draft} onChange={e => setDraft(e.target.value)}/>{draft && <button type="button" aria-label="코스 검색어 지우기" onClick={() => { setDraft(''); setKeyword(''); setPage(1); }}><X size={16}/></button>}<button className="course-search-submit">검색</button></form>
-      <div className="course-toolbar"><div className="course-tabs"><button className={!mine ? 'active' : ''} onClick={() => { setMine(false); setPage(1); }}>모두의 코스</button><button className={mine ? 'active' : ''} disabled={!loggedIn || !profileReady} onClick={() => withProfile(() => { setMine(true); setPage(1); })}>내가 공유한 코스</button><span>{loading ? '…' : feedError ? '—' : (feed?.total || 0).toLocaleString()}개의 여행</span></div><div className="course-filters"><select aria-label="공유 코스 지역" value={region} onChange={e => { setRegion(e.target.value); setPage(1); }}><option value="">전국 모든 지역</option>{options.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select><select aria-label="공유 코스 정렬" value={sort} onChange={e => { setSort(e.target.value); setPage(1); }}><option value="recent">최신순</option><option value="popular">좋아요 많은 순</option></select></div></div>
+      <div className="course-toolbar"><div className="course-tabs"><button className={!mine ? 'active' : ''} onClick={() => { setMine(false); setPage(1); }}>모두의 코스</button><button className={mine ? 'active' : ''} disabled={!loggedIn || !profileReady} onClick={() => withProfile(() => { setMine(true); setPage(1); })}>내가 공유한 코스</button><span>{loading ? '…' : feedError ? '—' : (feed?.total || 0).toLocaleString()}개의 여행</span></div><div className="course-filters"><select aria-label="공유 코스 지역" value={region} onChange={e => { setRegion(e.target.value); setPage(1); }}><option value="">전국 모든 지역</option>{options.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select><select aria-label={chosenDog ? "추천 순위가 같을 때 정렬" : "공유 코스 정렬"} value={sort} onChange={e => { setSort(e.target.value); setPage(1); }}><option value="recent">{chosenDog ? "동률이면 최신순" : "최신순"}</option><option value="popular">{chosenDog ? "동률이면 좋아요순" : "좋아요 많은 순"}</option></select></div></div>
       {keyword && <p className="course-search-caption">“{keyword}” 검색 결과 <button aria-label="코스 검색 해제" onClick={() => { setKeyword(''); setDraft(''); setPage(1); }}><X size={13}/></button></p>}
       <div className="course-dog-filter">
         {dogs?.length ? <label>반려견 맞춤 추천
-          <select value={chosenDog?.id ?? ''} onChange={event => { setDogId(event.target.value); setPage(1); }}>
+          <select value={chosenDog?.id ?? ''} onChange={event => selectDog(event.target.value)}>
             <option value="">전체 코스</option>
-            {dogs.map(dog => <option key={dog.id} value={dog.id}>{dog.name} · {dogSizes[dog.size]}</option>)}
+            {dogs.map(dog => <option key={dog.id} value={dog.id}>{dogProfileLabel(dog)}</option>)}
           </select>
         </label> : <a className="course-outline" href="#community/dogs">반려견 등록하고 맞춤 코스 찾기</a>}
-        {chosenDog && <p>{chosenDog.walkMinutes}분 이내 · {dogSizes[chosenDog.size]}. 작성자가 조건을 입력한 코스를 표시해요.</p>}
+        {chosenDog && <>
+          <form className="course-walk-filter" onSubmit={applyWalkTime}>
+            <label>최대 산책 시간 (분)
+              <input type="number" min={1} max={600} value={walkTimeDraft ?? preferredWalkMinutes ?? ''}
+                onChange={event => setWalkTimeDraft(event.target.value)}/>
+            </label>
+            <button className="course-outline">적용</button>
+            {maxWalkMinutes != null && <button className="course-outline" type="button" onClick={() => selectDog(chosenDog.id)}>프로필 시간 사용</button>}
+          </form>
+          <label>추천 정렬
+            <select value={effectiveWalkOrder} disabled={timeUnknown} onChange={event => {
+              setWalkOrder(event.target.value as WalkOrder);
+              setPage(1);
+            }}>
+              <option value="SHORTER">짧은 코스 우선</option>
+              <option value="CLOSEST_TO_PREFERENCE" disabled={preferredWalkMinutes === null}>
+                {preferredWalkMinutes === null ? '프로필에 선호 시간 필요' : `선호 시간 ${preferredWalkMinutes}분에 가까운 순`}
+              </option>
+            </select>
+          </label>
+          <label className="course-walk-unknown">
+            <input type="checkbox" checked={timeUnknown} onChange={event => { setTimeUnknown(event.target.checked); setPage(1); }}/>
+            시간 정보가 없는 코스 보기
+          </label>
+        </>}
       </div>
-      {loading ? <div className="course-loading" role="status"><LoaderCircle className="spin" size={22}/> 여행자들의 코스를 불러오고 있어요</div> : feedError ? <div className="course-empty" role="alert"><Info size={32}/><h3>코스를 불러오지 못했어요</h3><p>{feedError}</p><button className="primary-button" onClick={() => setRevision(n => n + 1)}>다시 시도</button></div> : !feed?.items.length ? <div className="course-empty"><Route size={38}/><h3>{chosenDog ? '반려견의 조건에 맞는 코스가 없어요' : keyword || region ? '이 조건의 코스를 아직 찾지 못했어요' : mine ? '나만의 첫 코스를 공유해보세요' : '첫 번째 여행 코스를 기다리고 있어요'}</h3><p>{chosenDog ? '전체 코스를 선택해 산책 조건이 등록되지 않은 코스도 둘러볼 수 있어요.' : keyword || region ? '다른 지역이나 검색어로 찾아보세요.' : '좋아하는 장소를 두 곳 이상 담고, 여행 이야기를 들려주세요.'}</p><button className="primary-button" disabled={!loggedIn || !profileReady} onClick={startCreate}>나의 코스 만들고 공유하기 <ArrowRight size={16}/></button></div> : <div className="shared-course-grid">{feed.items.map(item => {
+      {loading ? <div className="course-loading" role="status"><LoaderCircle className="spin" size={22}/> 여행자들의 코스를 불러오고 있어요</div>
+        : feedError ? <div className="course-empty" role="alert"><Info size={32}/><h3>코스를 불러오지 못했어요</h3><p>{feedError}</p><button className="primary-button" onClick={() => setRevision(n => n + 1)}>다시 시도</button></div>
+        : !feed?.items.length ? <div className="course-empty">
+          <Route size={38}/>
+          <h3>{chosenDog ? (timeUnknown ? '시간 정보가 없는 코스가 없어요' : '조건에 맞는 추천 코스가 없어요')
+            : keyword || region ? '이 조건의 코스를 아직 찾지 못했어요' : mine ? '나만의 첫 코스를 공유해보세요' : '첫 번째 여행 코스를 기다리고 있어요'}</h3>
+          <p>{chosenDog ? (timeUnknown ? '검색어나 지역을 변경해 보세요.' : '최대 산책 시간을 바꾸거나 시간 정보가 없는 코스를 둘러보세요.')
+            : keyword || region ? '다른 지역이나 검색어로 찾아보세요.' : '좋아하는 장소를 두 곳 이상 담고, 여행 이야기를 들려주세요.'}</p>
+          {chosenDog ? <button className="primary-button" onClick={() => selectDog('')}>전체 코스 보기</button>
+            : <button className="primary-button" disabled={!loggedIn || !profileReady} onClick={startCreate}>나의 코스 만들고 공유하기 <ArrowRight size={16}/></button>}
+        </div> : <div className="shared-course-grid">{feed.items.map(item => {
         const cover = item.course.stops.find(p => p.image);
-        return <article className="shared-course-card" key={item.course.id}><button className="shared-course-open" onClick={() => openCourse(item.course.id)} aria-label={`${item.course.title} 코스 자세히 보기`}><div className="shared-course-cover"><img loading="lazy" src={safeImage(cover?.image || '')} alt={cover ? `${cover.name} 사진` : '여행 코스'} onError={e => { if (e.currentTarget.getAttribute('src') !== '/images/placeholder.svg') e.currentTarget.src = '/images/placeholder.svg'; }}/><span><Route size={13}/>{item.course.stops.length}곳을 잇는 여행</span><b>{regionName(item.course.region)}</b></div><div className="shared-course-body"><h3>{item.course.title}</h3><p className="shared-course-intro">{item.course.content}</p><ol className="shared-course-mini-stops">{item.course.stops.slice(0, 3).map((p, i) => <li key={p.id}><span>{i+1}</span>{p.name}</li>)}{item.course.stops.length > 3 && <li className="course-more-stops">+{item.course.stops.length-3}곳 더</li>}</ol><div className="shared-course-footer"><span>{item.author.nickname} · {communityDate(item.course.createdAt)}</span><span><Heart size={13} fill={item.liked ? 'currentColor' : 'none'}/>{item.likeCount}</span></div></div></button>{cover && photoCredit(cover) && <p className="course-photo-credit">{photoPage(cover) ? <a href={photoPage(cover)} target="_blank" rel="noreferrer">{photoCredit(cover)} ↗</a> : photoCredit(cover)}</p>}</article>;
+        return <article className="shared-course-card" key={item.course.id}><button className="shared-course-open" onClick={() => openCourse(item.course.id)} aria-label={`${item.course.title} 코스 자세히 보기`}><div className="shared-course-cover"><img loading="lazy" src={safeImage(cover?.image || '')} alt={cover ? `${cover.name} 사진` : '여행 코스'} onError={e => { if (e.currentTarget.getAttribute('src') !== '/images/placeholder.svg') e.currentTarget.src = '/images/placeholder.svg'; }}/><span><Route size={13}/>{item.course.stops.length}곳을 잇는 여행</span><b>{regionName(item.course.region)}</b></div><div className="shared-course-body"><h3>{item.course.title}</h3><p className="shared-course-intro">{item.course.content}</p>
+          {item.recommendation && <WalkRecommendationSummary assessment={item.recommendation}/>}
+          <ol className="shared-course-mini-stops">{item.course.stops.slice(0, 3).map((p, i) => <li key={p.id}><span>{i+1}</span>{p.name}</li>)}{item.course.stops.length > 3 && <li className="course-more-stops">+{item.course.stops.length-3}곳 더</li>}</ol><div className="shared-course-footer"><span>{item.author.nickname} · {communityDate(item.course.createdAt)}</span><span><Heart size={13} fill={item.liked ? 'currentColor' : 'none'}/>{item.likeCount}</span></div></div></button>{cover && photoCredit(cover) && <p className="course-photo-credit">{photoPage(cover) ? <a href={photoPage(cover)} target="_blank" rel="noreferrer">{photoCredit(cover)} ↗</a> : photoCredit(cover)}</p>}</article>;
       })}</div>}
       {!loading && !feedError && pages > 1 && <nav className="pagination" aria-label="공유 코스 페이지"><button aria-label="이전 코스 페이지" disabled={page === 1} onClick={() => setPage(n => n - 1)}><ChevronLeft size={16}/></button><span><b>{page}</b> / {pages}</span><button aria-label="다음 코스 페이지" disabled={page >= pages} onClick={() => setPage(n => n + 1)}><ChevronRight size={16}/></button></nav>}
       <p className="course-community-note"><PawPrint size={14}/> 같은 서버에 접속한 여행자들과 코스를 나눠요. 방문 전 각 장소의 동반 조건을 확인해주세요.</p>
     </section>
     {toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
     {composer && <Modal title={editing ? '공유 코스 수정' : '우리의 코스 공유하기'} close={() => { if (!busy) { setComposer(false); setError(''); } }} wide><form className="course-form" onSubmit={publish}><p>방문할 장소와 순서를 확인하고, 이 코스가 좋은 이유를 들려주세요.</p><ErrorMessage message={error}/><div className="course-compose-fields"><label>코스 이름<input required minLength={2} maxLength={80} placeholder="예: 보리와 보내는 느긋한 서울숲 하루" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}/></label><label>대표 지역<select value={form.region} onChange={e => setForm({ ...form, region: e.target.value })}>{options.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select></label></div><label>코스 소개<textarea required minLength={5} maxLength={5000} rows={4} placeholder="추천하는 방문 시간, 쉬어가기 좋은 곳, 반려동물과 함께할 때의 팁을 알려주세요." value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}/></label><WalkConditionsFields walk={walk} onChange={setWalk}/><div className="course-compose-stops"><h3>방문 순서 <span>{composeStops.length}/{MAX_STOPS}곳</span></h3><CourseStops stops={composeStops} onChange={setComposeStops}/></div><p className="course-session-note">선택한 장소와 순서가 공개돼요. 현재 위치는 공유하지 않습니다.</p><button className="primary-button" disabled={busy || composeStops.length < 2}>{busy ? <LoaderCircle className="spin" size={17}/> : <Share2 size={17}/>} {editing ? '수정한 코스 저장' : '코스 공유하기'}</button></form></Modal>}
-    {selected && !profileOpen && <Modal title="함께 떠나는 코스" close={closeCourse} wide><ErrorMessage message={error}/>{!course ? <div className="course-loading">{detailLoading && <><LoaderCircle className="spin" size={22}/> 코스를 불러오고 있어요</>}{!detailLoading && <button onClick={() => setRevision(n => n + 1)}>다시 시도</button>}</div> : <div className="course-detail"><div className="course-detail-label"><span>{regionName(course.region)}</span><span><Route size={14}/>{course.stops.length}곳의 여행</span></div><h2>{course.title}</h2><p className="course-detail-author">{detail.author.nickname}{detail.author.petName && ` · ${detail.author.petName}와 함께`}<time>{communityDate(course.createdAt)}</time></p><p className="course-description">{course.content}</p>{course.walk && <p className="course-walk-summary">예상 산책 {course.walk.minutes}분 · {course.walk.sizes.map(size => dogSizes[size]).join("·")}{course.walk.stairs != null && (course.walk.stairs ? " · 계단 있음" : " · 계단 없음")}{course.walk.shade != null && (course.walk.shade ? " · 그늘 있음" : " · 그늘 없음")}{course.walk.quiet === true && " · 조용한 코스"}</p>}<CoursePreview stops={course.stops}/><div className="course-detail-stops"><h3>이 순서로 함께 가요</h3><CourseStops stops={course.stops}/></div><div className="course-detail-actions"><button className="primary-button" disabled={busy} onClick={() => tripStops.length ? setReplaceConfirm(true) : importCourse()}><Plus size={17}/> 내 코스로 가져오기</button><button className={`course-outline ${detail.liked ? 'liked' : ''}`} disabled={!loggedIn || busy || !profileReady} onClick={() => void likeCourse(detail)}><Heart size={16} fill={detail.liked ? 'currentColor' : 'none'}/> 좋아요 {detail.likeCount}</button><button className="course-outline" disabled={!loggedIn} onClick={() => void copyLink(course.id)}><Copy size={16}/> 링크 복사</button></div>{replaceConfirm && <div className="course-confirm" role="group" aria-label="나의 코스 교체 확인"><p>현재 담은 {tripStops.length}곳을 이 코스로 바꿀까요?</p><button className="primary-button" onClick={importCourse}>이 코스로 바꾸기</button><button onClick={() => setReplaceConfirm(false)}>취소</button></div>}{loggedIn && <label className="course-share-address">공유 링크<input readOnly value={shareUrl} onFocus={e => e.currentTarget.select()} aria-label="코스 공유 링크"/></label>}{detail.mine && <div className="course-owner-actions"><button disabled={busy} onClick={() => editCourse(detail)}><Pencil size={14}/> 코스 수정</button>{!deleteConfirm ? <button disabled={busy} onClick={() => setDeleteConfirm(true)}><Trash2 size={14}/> 공유 삭제</button> : <div className="course-confirm"><span>공유한 코스를 삭제할까요?</span><button disabled={busy} onClick={() => void run(async () => { await request(`/courses/${course.id}`, 'DELETE'); setSelected(''); window.location.hash = 'community'; setRevision(n => n + 1); setToast('코스 공유를 삭제했어요.'); })}>삭제하기</button><button disabled={busy} onClick={() => setDeleteConfirm(false)}>취소</button></div>}</div>}</div>}</Modal>}
+    {selected && !profileOpen && <Modal title="함께 떠나는 코스" close={closeCourse} wide><ErrorMessage message={error}/>{!course ? <div className="course-loading">{detailLoading && <><LoaderCircle className="spin" size={22}/> 코스를 불러오고 있어요</>}{!detailLoading && <button onClick={() => setRevision(n => n + 1)}>다시 시도</button>}</div> : <div className="course-detail"><div className="course-detail-label"><span>{regionName(course.region)}</span><span><Route size={14}/>{course.stops.length}곳의 여행</span></div><h2>{course.title}</h2><p className="course-detail-author">{detail.author.nickname}{detail.author.petName && ` · ${detail.author.petName}와 함께`}<time>{communityDate(course.createdAt)}</time></p><p className="course-description">{course.content}</p>{course.walk && <p className="course-walk-summary">{course.walk.minutes != null && course.walk.minutes >= 1 && course.walk.minutes <= 600 ? `예상 산책 ${course.walk.minutes}분` : '시간 정보 부족'}{course.walk.stairs != null && (course.walk.stairs ? " · 계단 있음" : " · 계단 없음")}{course.walk.shade != null && (course.walk.shade ? " · 그늘 있음" : " · 그늘 없음")}{course.walk.quiet === true && " · 조용한 코스"}</p>}<CoursePreview stops={course.stops}/><div className="course-detail-stops"><h3>이 순서로 함께 가요</h3><CourseStops stops={course.stops}/></div><div className="course-detail-actions"><button className="primary-button" disabled={busy} onClick={() => tripStops.length ? setReplaceConfirm(true) : importCourse()}><Plus size={17}/> 내 코스로 가져오기</button><button className={`course-outline ${detail.liked ? 'liked' : ''}`} disabled={!loggedIn || busy || !profileReady} onClick={() => void likeCourse(detail)}><Heart size={16} fill={detail.liked ? 'currentColor' : 'none'}/> 좋아요 {detail.likeCount}</button><button className="course-outline" disabled={!loggedIn} onClick={() => void copyLink(course.id)}><Copy size={16}/> 링크 복사</button></div>{replaceConfirm && <div className="course-confirm" role="group" aria-label="나의 코스 교체 확인"><p>현재 담은 {tripStops.length}곳을 이 코스로 바꿀까요?</p><button className="primary-button" onClick={importCourse}>이 코스로 바꾸기</button><button onClick={() => setReplaceConfirm(false)}>취소</button></div>}{loggedIn && <label className="course-share-address">공유 링크<input readOnly value={shareUrl} onFocus={e => e.currentTarget.select()} aria-label="코스 공유 링크"/></label>}{detail.mine && <div className="course-owner-actions"><button disabled={busy} onClick={() => editCourse(detail)}><Pencil size={14}/> 코스 수정</button>{!deleteConfirm ? <button disabled={busy} onClick={() => setDeleteConfirm(true)}><Trash2 size={14}/> 공유 삭제</button> : <div className="course-confirm"><span>공유한 코스를 삭제할까요?</span><button disabled={busy} onClick={() => void run(async () => { await request(`/courses/${course.id}`, 'DELETE'); setSelected(''); window.location.hash = 'community'; setRevision(n => n + 1); setToast('코스 공유를 삭제했어요.'); })}>삭제하기</button><button disabled={busy} onClick={() => setDeleteConfirm(false)}>취소</button></div>}</div>}</div>}</Modal>}
   </main>;
 }

@@ -168,16 +168,28 @@ class KakaoLoginTests {
         var member = signIn.member();
         assertEquals("existing-member", member.id());
         assertTrue(existing.dogs(member).isEmpty());
-        var dog = existing.saveDog(member, null,
-                new MemberStore.DogInput("구름", MemberStore.DogSize.MEDIUM, null, 25), false);
+        var dog = existing.saveDog(member, null, new MemberStore.DogInput("구름", 25), false);
         var saved = (tools.jackson.databind.node.ObjectNode) mapper.readTree(Files.readString(legacyFile))
                 .path(Long.toString(KAKAO_USER_ID)).path("dogs").get(0);
-        var legacyDog = saved.deepCopy().put("avoidStairs", true).put("preferShade", true).put("preferQuiet", true);
+        var legacyDog = saved.deepCopy().put("size", "MEDIUM").put("age", 4)
+                .put("publicProfile", true).put("avoidStairs", true).put("preferShade", true).put("preferQuiet", true);
+        var unnamedDog = saved.deepCopy().put("id", "unnamed-dog");
+        unnamedDog.remove("name");
         Files.writeString(legacyFile, mapper.writeValueAsString(Map.of(KAKAO_USER_ID,
-                Map.of("id", member.id(), "nickname", member.nickname(), "dogs", List.of(legacyDog)))));
+                Map.of("id", member.id(), "nickname", member.nickname(), "dogs", List.of(legacyDog, unnamedDog)))));
         var reopened = new MemberStore(mapper, legacyFile.toString());
         assertEquals(member, reopened.signIn(user).member());
-        assertEquals(List.of(dog), reopened.dogs(member));
+        assertEquals(new MemberStore.DogProfile(dog.id(), "구름", 25, true), reopened.dog(member, dog.id()));
+        assertEquals(new MemberStore.PublicDog("구름"), reopened.publicDog(dog.id()));
+        assertEquals(new MemberStore.DogProfile(dog.id(), "하늘", 35, true),
+                reopened.saveDog(member, dog.id(), new MemberStore.DogInput("하늘", 35), false));
+        assertEquals(new MemberStore.PublicDog("하늘"), reopened.publicDog(dog.id()));
+        assertNull(reopened.dog(member, "unnamed-dog").name());
+        assertEquals(new MemberStore.DogProfile("unnamed-dog", "노을", 25, false),
+                reopened.saveDog(member, "unnamed-dog", new MemberStore.DogInput("노을", 25), false));
+        var updated = mapper.readTree(Files.readString(legacyFile)).path(Long.toString(KAKAO_USER_ID)).path("dogs").get(0);
+        assertFalse(updated.has("size"));
+        assertFalse(updated.has("age"));
     }
 
     @Test void checkedSkipHidesTheReminderAcrossLoginsAndExistingSettingsExpire() throws Exception {
@@ -214,7 +226,7 @@ class KakaoLoginTests {
         assertEquals(204, call("POST", "/logout", direct, true).statusCode());
         String normal = signIn(userId, "직접 등록 보호자");
         assertTrue(session(normal).path("dogSetupPending").asBoolean());
-        var input = Map.of("name", "구름", "size", "MEDIUM", "walkMinutes", 30);
+        var input = Map.of("name", "구름", "walkMinutes", 30);
         json(201, send("POST", "/api/auth/dogs?hideSetup=true", normal, input, true));
         assertFalse(session(normal).path("dogSetupPending").asBoolean());
         assertEquals(204, call("POST", "/logout", normal, true).statusCode());
@@ -226,15 +238,20 @@ class KakaoLoginTests {
         String owner = signIn(ownerId, "보리 보호자");
         String neighbor = signIn(neighborId, "이웃 보호자");
         String dogs = "/api/auth/dogs";
-        var input = new HashMap<String, Object>(Map.of("name", "보리", "size", "SMALL", "age", 4, "walkMinutes", 30));
+        var input = Map.of("name", "  보리  ", "walkMinutes", 30);
         assertTrue(session(owner).path("dogSetupPending").asBoolean());
         assertEquals(401, send("GET", dogs, null, null, true).statusCode());
         assertEquals(401, send("POST", dogs, null, input, true).statusCode());
         assertEquals(403, send("POST", dogs, owner, input, false).statusCode());
+        assertEquals(400, send("POST", dogs, owner, Map.of("name", "보리", "walkMinutes", 0), true).statusCode());
+        assertEquals(400, send("POST", dogs, owner, Map.of("name", "  ", "walkMinutes", 30), true).statusCode());
         var dog = json(201, send("POST", dogs, owner, input, true));
         String id = dog.path("id").asString();
         assertFalse(session(owner).path("dogSetupPending").asBoolean());
         assertFalse(dog.path("publicProfile").asBoolean());
+        assertEquals("보리", dog.path("name").asString());
+        assertFalse(dog.has("age"));
+        assertFalse(dog.has("size"));
         assertEquals(dog, json(200, send("GET", dogs, owner, null, true)).get(0));
         assertEquals(0, json(200, send("GET", dogs, neighbor, null, true)).size());
         assertEquals(404, send("PUT", dogs + "/" + id, neighbor, input, true).statusCode());
@@ -246,56 +263,88 @@ class KakaoLoginTests {
         var stops = csv.inRegion("11").stream().map(CsvFacilities.Facility::place)
                 .filter(place -> !place.latitude().isBlank() && !place.longitude().isBlank()).limit(2)
                 .map(place -> Map.of("id", place.id(), "latitude", place.latitude(), "longitude", place.longitude())).toList();
-        var walk = Map.<String, Object>of("minutes", 25, "sizes", List.of("SMALL"), "stairs", false, "shade", true, "quiet", true);
-        var cases = List.of(walk, with(walk, "minutes", 31), with(walk, "sizes", List.of("LARGE")));
+        var walk = Map.<String, Object>of("minutes", 25, "stairs", false, "shade", true, "quiet", true);
         String courses = "/api/community/courses";
         var body = new HashMap<String, Object>(Map.of("title", "프로필추천 산책", "content", "반려견과 함께 걸어요.", "region", "11", "stops", stops));
-        json(201, send("POST", courses, travelerCookie, body, true)); // A course without walk conditions.
-        String matchingCourseId = "";
-        for (var conditions : cases) {
-            body.put("walk", conditions);
-            var course = json(201, send("POST", courses, travelerCookie, body, true)).path("course");
-            if (conditions == walk) matchingCourseId = course.path("id").asString();
-        }
+        String unknownId = postCourse(travelerCookie, body);
+        String matchingCourseId = postCourse(travelerCookie, with(body, "walk", walk));
+        String boundaryId = postCourse(travelerCookie, with(body, "walk", with(walk, "minutes", 30)));
+        String longerId = postCourse(travelerCookie, with(body, "walk", with(walk, "minutes", 31)));
+        var legacyWalk = with(with(walk, "minutes", 22), "sizes", List.of("LARGE"));
+        String legacyId = postCourse(travelerCookie, with(body, "walk", legacyWalk));
+        var legacyCourse = json(200, send("GET", courses + "/" + legacyId, null, null, false)).path("course");
+        assertFalse(legacyCourse.path("walk").has("sizes"));
+        postCourse(travelerCookie, with(with(body, "walk", walk), "region", "26"));
+        postCourse(travelerCookie, with(with(body, "walk", with(walk, "minutes", 20)), "title", "다른 검색어"));
+
         String filtered = courses + "?dog=" + id;
-        assertEquals(4, json(200, send("GET", courses, null, null, false)).path("total").asInt());
+        var plain = json(200, send("GET", courses, null, null, false));
+        assertEquals(7, plain.path("total").asInt());
+        assertFalse(plain.path("items").get(0).has("recommendation"));
         assertEquals(401, send("GET", filtered, null, null, false).statusCode());
         assertEquals(404, send("GET", filtered, neighbor, null, false).statusCode());
+        filtered += "&region=11&keyword=" + java.net.URLEncoder.encode("프로필추천", StandardCharsets.UTF_8);
         var matches = json(200, send("GET", filtered, owner, null, false));
-        assertEquals(1, matches.path("total").asInt());
-        assertEquals(matchingCourseId, matches.path("items").get(0).path("course").path("id").asString());
+        assertEquals(List.of(legacyId, matchingCourseId, boundaryId), courseIds(matches));
         assertTrue(matches.path("items").get(0).path("mine").asBoolean());
-        assertEquals(1, json(200, send("GET", filtered + "&mine=true", owner, null, false)).path("total").asInt());
+        assertEquals(courseIds(matches), courseIds(json(200, send("GET", filtered + "&mine=true", owner, null, false))));
+        var boundary = matches.path("items").get(2);
+        var assessment = boundary.path("recommendation");
+        assertEquals("WITHIN_LIMIT", assessment.path("time").asString());
+        assertFalse(assessment.has("size"));
+        assertEquals(30, assessment.path("minutes").asInt());
+        assertEquals(30, assessment.path("maxMinutes").asInt());
+        var detail = json(200, send("GET", courses + "/" + boundaryId, null, null, false));
+        assertEquals(boundary.path("course"), detail.path("course"));
+        assertEquals(stops.getFirst().get("id"), detail.path("course").path("stops").get(0).path("id").asString());
+        assertFalse(detail.has("recommendation"));
+        assertEquals(List.of(legacyId, matchingCourseId), courseIds(json(200, send("GET", filtered + "&maxWalkMinutes=25", owner, null, false))));
+        assertEquals(List.of(legacyId, matchingCourseId, boundaryId, longerId),
+                courseIds(json(200, send("GET", filtered + "&maxWalkMinutes=31", owner, null, false))));
+        assertEquals(List.of(boundaryId, longerId, matchingCourseId, legacyId),
+                courseIds(json(200, send("GET", filtered + "&maxWalkMinutes=31&walkOrder=CLOSEST_TO_PREFERENCE", owner, null, false))));
+        assertEquals(400, send("GET", filtered + "&maxWalkMinutes=0", owner, null, false).statusCode());
+        var missing = json(200, send("GET", filtered + "&timeUnknown=true", owner, null, false));
+        assertEquals(List.of(unknownId), courseIds(missing));
+        assertEquals("UNKNOWN", missing.path("items").get(0).path("recommendation").path("time").asString());
+        var shorterProfile = json(201, send("POST", dogs, owner, Map.of("name", "두부", "walkMinutes", 24), true));
+        String shorterFeed = filtered.replace("dog=" + id, "dog=" + shorterProfile.path("id").asString());
+        assertEquals(List.of(legacyId), courseIds(json(200, send("GET", shorterFeed, owner, null, false))));
+
         var editedWalk = with(walk, "minutes", 28);
         body.put("walk", editedWalk);
         var editedCourse = json(200, send("PUT", courses + "/" + matchingCourseId, travelerCookie, body, true)).path("course");
         assertEquals(28, editedCourse.path("walk").path("minutes").asInt());
-        assertEquals(1, json(200, send("GET", filtered, owner, null, false)).path("total").asInt());
+        assertEquals(3, json(200, send("GET", filtered, owner, null, false)).path("total").asInt());
 
-        input.put("name", "보리 수정");
-        input.remove("age");
-        input.put("walkMinutes", 20);
+        var updatedInput = Map.of("name", "보리별", "walkMinutes", 20);
         String visibility = dogs + "/" + id + "/visibility";
         assertEquals(404, send("PUT", visibility, neighbor, Map.of("publicProfile", true), true).statusCode());
-        json(200, send("PUT", visibility, owner, Map.of("publicProfile", true), true));
-        var updated = json(200, send("PUT", dogs + "/" + id, owner, input, true));
-        assertTrue(updated.path("age").isNull());
-        assertTrue(updated.path("publicProfile").asBoolean());
+        var updated = json(200, send("PUT", dogs + "/" + id, owner, updatedInput, true));
+        assertEquals(id, updated.path("id").asString());
+        assertEquals("보리별", updated.path("name").asString());
+        assertEquals(20, updated.path("walkMinutes").asInt());
+        assertFalse(updated.path("publicProfile").asBoolean());
         assertEquals(0, json(200, send("GET", filtered, owner, null, false)).path("total").asInt());
-        var publicDog = json(200, send("GET", dogs + "/" + id + "/public", null, null, false));
-        assertEquals(mapper.valueToTree(Map.of("name", "보리 수정", "size", "SMALL")), publicDog);
-        assertEquals(404, send("PUT", dogs + "/" + id, neighbor, input, true).statusCode());
-        var privateDog = json(200, send("PUT", visibility, owner, Map.of("publicProfile", false), true));
         assertEquals(404, send("GET", dogs + "/" + id + "/public", neighbor, null, false).statusCode());
 
         assertEquals(204, call("POST", "/logout", owner, true).statusCode());
         assertEquals(401, send("GET", dogs, owner, null, true).statusCode());
         String signedBackIn = signIn(ownerId, "새 보호자 닉네임");
         assertTrue(session(signedBackIn).path("dogSetupPending").asBoolean());
-        assertEquals(privateDog, json(200, send("GET", dogs, signedBackIn, null, true)).get(0));
+        assertEquals(updated, json(200, send("GET", dogs, signedBackIn, null, true)).values().stream()
+                .filter(item -> id.equals(item.path("id").asString())).findFirst().orElseThrow());
         var reopened = new MemberStore(mapper, dataDir.resolve("members.json").toString());
         var savedMember = reopened.signIn(new KakaoLoginClient.User(ownerId, "새 보호자 닉네임")).member();
-        assertEquals(privateDog, mapper.valueToTree(reopened.dog(savedMember, id)));
+        assertEquals(updated, mapper.valueToTree(reopened.dog(savedMember, id)));
+    }
+
+    private String postCourse(String cookie, Map<String, Object> body) throws Exception {
+        return json(201, send("POST", "/api/community/courses", cookie, body, true)).path("course").path("id").asString();
+    }
+
+    private static List<String> courseIds(JsonNode feed) {
+        return feed.path("items").values().stream().map(item -> item.path("course").path("id").asString()).toList();
     }
 
     private static Map<String, Object> with(Map<String, Object> source, String key, Object value) {

@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import tools.jackson.databind.ObjectMapper;
 import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
@@ -21,11 +23,8 @@ public class CommunityService {
     public record Account(String tokenHash, Profile profile) {}
     public record ProfileInput(String nickname, String petName) {}
     public record StopInput(String id, String latitude, String longitude) {}
-    public record WalkConditions(Integer minutes, Set<MemberStore.DogSize> sizes, Boolean stairs, Boolean shade, Boolean quiet) {
-        boolean matches(MemberStore.DogProfile dog) {
-            return minutes != null && minutes <= dog.walkMinutes() && sizes != null && sizes.contains(dog.size());
-        }
-    }
+    @JsonIgnoreProperties("sizes")
+    public record WalkConditions(Integer minutes, Boolean stairs, Boolean shade, Boolean quiet) {}
     public record CourseInput(String title, String content, String region, List<StopInput> stops, WalkConditions walk) {}
     public record Course(String id, String authorId, String title, String content, String region,
                          List<Place> stops, String createdAt, String updatedAt, Set<String> likes, WalkConditions walk) {}
@@ -53,8 +52,11 @@ public class CommunityService {
     }
     public record PublicCourse(String id, String title, String content, String region, List<Place> stops, String createdAt, String updatedAt,
                                WalkConditions walk) {}
-    public record CourseView(PublicCourse course, Profile author, int likeCount, boolean mine, boolean liked) {}
+    public record CourseView(PublicCourse course, Profile author, int likeCount, boolean mine, boolean liked,
+                             @JsonInclude(JsonInclude.Include.NON_NULL) WalkRecommendation.Assessment recommendation) {}
     public record Feed(List<CourseView> items, long total, int page, int pageSize) {}
+    private record WalkCandidate(Course course, WalkRecommendation.Assessment assessment) {}
+    private static final int PAGE_SIZE = 12;
     private final ObjectMapper mapper;
     private final Path file;
     private final CombinedPlaceService catalog;
@@ -137,27 +139,41 @@ public class CommunityService {
         if (!course.authorId.equals(user.id)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "내가 공유한 코스만 변경할 수 있어요.");
     }
     private CourseView view(Course p, Profile user) {
-        return new CourseView(new PublicCourse(p.id, p.title, p.content, p.region, p.stops, p.createdAt, p.updatedAt, p.walk), author(p.authorId),
-            p.likes.size(), user != null && p.authorId.equals(user.id), user != null && p.likes.contains(user.id));
+        return view(p, user, null);
     }
-    public synchronized Feed feed(String token, String region, String keyword, String sort, int page, boolean mine, MemberStore.DogProfile dog) {
+    private CourseView view(Course p, Profile user, WalkRecommendation.Assessment recommendation) {
+        return new CourseView(new PublicCourse(p.id, p.title, p.content, p.region, p.stops, p.createdAt, p.updatedAt, p.walk), author(p.authorId),
+            p.likes.size(), user != null && p.authorId.equals(user.id), user != null && p.likes.contains(user.id), recommendation);
+    }
+    public synchronized Feed feed(String token, String region, String keyword, String sort, int page, boolean mine,
+                                  WalkRecommendation recommendation, boolean timeUnknown) {
         if (!Set.of("recent", "popular").contains(sort) || page < 1 || page > 10000 || keyword.length() > 60) throw bad("검색 조건을 확인해주세요.");
         if (!region.isEmpty()) region(region);
         var user = mine ? require(token) : me(token);
         String q = CombinedPlaceService.normalize(keyword);
         Comparator<Course> byRecent = Comparator.comparing(Course::createdAt).reversed().thenComparing(Course::id);
+        Comparator<Course> bySort = sort.equals("popular")
+                ? Comparator.<Course>comparingInt(p -> p.likes.size()).reversed().thenComparing(byRecent) : byRecent;
         var results = db.courses.stream().filter(p -> region.isEmpty() || p.region.equals(region))
             .filter(p -> !mine || p.authorId.equals(user.id))
-            .filter(p -> dog == null || (p.walk != null && p.walk.matches(dog)))
-            .filter(p -> CombinedPlaceService.normalize(p.title + " " + p.content + " " + p.stops.stream().map(s -> s.name()+" "+s.address()).reduce("", (a,b) -> a+" "+b)).contains(q))
-            .sorted(sort.equals("popular") ? Comparator.<Course>comparingInt(p -> p.likes.size()).reversed().thenComparing(byRecent) : byRecent).toList();
-        return new Feed(results.stream().skip((long)(page - 1) * 12).limit(12).map(p -> view(p, user)).toList(), results.size(), page, 12);
+            .filter(p -> CombinedPlaceService.normalize(p.title + " " + p.content + " " + p.stops.stream().map(s -> s.name()+" "+s.address()).reduce("", (a,b) -> a+" "+b)).contains(q));
+        long offset = (long) (page - 1) * PAGE_SIZE;
+        if (recommendation == null) {
+            var all = results.sorted(bySort).toList();
+            return new Feed(all.stream().skip(offset).limit(PAGE_SIZE).map(p -> view(p, user)).toList(), all.size(), page, PAGE_SIZE);
+        }
+        var candidates = results.map(p -> new WalkCandidate(p, recommendation.assess(p.walk())))
+                .filter(candidate -> candidate.assessment().eligible(timeUnknown))
+                .sorted(Comparator.comparing(WalkCandidate::assessment, recommendation.ranking())
+                        .thenComparing(WalkCandidate::course, bySort)).toList();
+        var items = candidates.stream().skip(offset).limit(PAGE_SIZE)
+                .map(candidate -> view(candidate.course(), user, candidate.assessment())).toList();
+        return new Feed(items, candidates.size(), page, PAGE_SIZE);
     }
     private static WalkConditions walkConditions(WalkConditions walk) {
         if (walk == null) return null;
-        if (walk.minutes == null || walk.minutes < 1 || walk.minutes > 600
-                || walk.sizes == null || walk.sizes.isEmpty() || walk.sizes.contains(null))
-            throw bad("산책 시간과 함께 걸을 수 있는 반려견 크기를 입력해주세요.");
+        if (!WalkRecommendation.validMinutes(walk.minutes))
+            throw bad("예상 산책 시간은 1~600분으로 입력해주세요.");
         return walk;
     }
     public synchronized CourseView detail(String token, String id) { return view(find(id), me(token)); }
