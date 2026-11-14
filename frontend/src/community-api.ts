@@ -1,8 +1,10 @@
 import type { Place } from './lib.ts';
 import { coordinatesOf, MAX_STOPS } from './trip.ts';
+import type { DogSize } from './dog-profiles.ts';
 
 export type Profile = { id: string; nickname: string; petName: string };
-export type SharedCourse = { id: string; title: string; content: string; region: string; stops: Place[]; createdAt: string; updatedAt: string };
+export type WalkConditions = { minutes: number; sizes: DogSize[]; stairs: boolean | null; shade: boolean | null; quiet: boolean | null };
+export type SharedCourse = { id: string; title: string; content: string; region: string; stops: Place[]; createdAt: string; updatedAt: string; walk?: WalkConditions | null };
 export type CourseView = { course: SharedCourse; author: Profile; likeCount: number; mine: boolean; liked: boolean };
 export type CourseFeed = { items: CourseView[]; total: number; page: number; pageSize: number };
 export async function communityApi<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
@@ -11,7 +13,7 @@ export async function communityApi<T>(path: string, method = 'GET', body?: unkno
     body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || '요청을 처리하지 못했어요. 연결을 확인하고 다시 시도해주세요.');
+    throw Object.assign(new Error(error.message || '요청을 처리하지 못했어요. 연결을 확인하고 다시 시도해주세요.'), { status: response.status });
   }
   const result = response.status === 204 ? undefined as T : await response.json();
   if (method !== 'GET' && path !== '/nfc/heartbeat') window.dispatchEvent(new Event('community-points-changed'));
@@ -20,7 +22,7 @@ export async function communityApi<T>(path: string, method = 'GET', body?: unkno
 export function communityDate(date: string) {
   return new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
 }
-export function isCommunityHash(hash: string) { return hash === '#community' || hash.startsWith('#community/course/'); }
+export function isCommunityHash(hash: string) { return hash === '#community' || hash === '#community/dogs' || hash.startsWith('#community/course/'); }
 export function courseIdFromHash(hash: string) {
   return /^#community\/course\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.exec(hash)?.[1] || '';
 }
