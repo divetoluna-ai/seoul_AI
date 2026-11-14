@@ -26,6 +26,12 @@ const server = http.createServer(async (req, res) => {
     const communityRoutes = [
       [/^\/api\/places\/(?:[0-9]{1,20}|csv-[a-f0-9]{20})\/kakao-photo$/, ['POST']],
       [/^\/api\/community\/profile$/, ['GET', 'HEAD', 'POST']],
+      [/^\/api\/community\/points$/, ['GET', 'HEAD']],
+      [/^\/api\/community\/nfc\/proximity$/, ['PUT']],
+      [/^\/api\/community\/nfc\/heartbeat$/, ['POST']],
+      [/^\/api\/community\/shares$/, ['POST']],
+      [new RegExp(`^/api/community/shares/${identifier}$`), ['GET', 'HEAD']],
+      [new RegExp(`^/api/community/shares/${identifier}/complete$`), ['PUT']],
       [/^\/api\/community\/posts$/, ['GET', 'HEAD', 'POST']],
       [new RegExp(`^/api/community/posts/${identifier}$`), ['GET', 'HEAD', 'DELETE']],
       [new RegExp(`^/api/community/posts/${identifier}/(?:like|join|status)$`), ['PUT']],

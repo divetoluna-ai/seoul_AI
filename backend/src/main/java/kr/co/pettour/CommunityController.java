@@ -42,6 +42,16 @@ public class CommunityController {
         @RequestParam(defaultValue="recent") String sort, @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="false") boolean mine) {
         return service.feed(token, category, region, district, keyword, sort, page, mine);
     }
+    @GetMapping("/points") public PointsView points(@CookieValue(name="daeng-community", required=false) String token) { return service.points(token); }
+    @PutMapping(value="/nfc/proximity", consumes=MediaType.APPLICATION_JSON_VALUE)
+    public PointsView nfcProximity(@CookieValue(name="daeng-community", required=false) String token, @RequestBody FlagInput input) { return service.nfcProximity(token, input.enabled()); }
+    @PostMapping("/nfc/heartbeat")
+    public PointsView nfcHeartbeat(@CookieValue(name="daeng-community", required=false) String token) { return service.nfcHeartbeat(token); }
+    @PostMapping(value="/shares", consumes=MediaType.APPLICATION_JSON_VALUE)
+    public SharedTripView createShare(@CookieValue(name="daeng-community", required=false) String token, @RequestBody ShareInput input) { return service.createShare(token, input); }
+    @GetMapping("/shares/{id}") public SharedTripView sharedTrip(@PathVariable String id) { return service.sharedTrip(id); }
+    @PutMapping("/shares/{id}/complete")
+    public ShareReward completeShare(@CookieValue(name="daeng-community", required=false) String token, @PathVariable String id) { return service.completeShare(token, id); }
     @GetMapping("/posts/{id}") public DetailView detail(@CookieValue(name="daeng-community", required=false) String token, @PathVariable String id) { return service.detail(token, id); }
     @PostMapping(value="/posts", consumes=MediaType.APPLICATION_JSON_VALUE) @ResponseStatus(HttpStatus.CREATED)
     public DetailView create(@CookieValue(name="daeng-community", required=false) String token, @RequestBody PostInput input) { return service.create(token, input); }

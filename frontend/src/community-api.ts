@@ -15,7 +15,9 @@ export async function communityApi<T>(path: string, method = 'GET', body?: unkno
     const error = await response.json().catch(() => ({}));
     throw new Error(error.message || '요청을 처리하지 못했어요. 연결을 확인하고 다시 시도해주세요.');
   }
-  return response.status === 204 ? undefined as T : response.json();
+  const result = response.status === 204 ? undefined as T : await response.json();
+  if (method !== 'GET' && path !== '/nfc/heartbeat') window.dispatchEvent(new Event('community-points-changed'));
+  return result;
 }
 export function communityDate(date: string) {
   return new Date(date).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
