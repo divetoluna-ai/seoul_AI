@@ -47,7 +47,7 @@ class CommunityIntegrationTests {
     Actor actor() throws Exception {
         String nick = "여행자" + UUID.randomUUID().toString().substring(0, 8);
         var member = members.signIn(new KakaoLoginClient.User(UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE, nick));
-        String cookie = "daeng-session=" + sessions.signIn(member.id());
+        String cookie = "daeng-session=" + sessions.signIn(member.member().id());
         var res = call("POST", "/profile", Map.of("nickname", nick, "petName", "보리"), cookie, true);
         assertEquals(200, res.statusCode(), res.body());
         assertTrue(res.headers().allValues("set-cookie").isEmpty());
@@ -175,7 +175,7 @@ class CommunityIntegrationTests {
         Files.writeString(legacy, old);
         var isolated = new CommunityService(mapper, catalog, legacy.toString()); isolated.saveProfile("new-token", new CommunityService.ProfileInput("새여행자", ""));
         assertEquals(old, Files.readString(legacy)); assertTrue(Files.exists(folder.resolve("course-community.json")));
-        assertEquals(0, isolated.feed(null, "", "", "recent", 1, false).total());
+        assertEquals(0, isolated.feed(null, "", "", "recent", 1, false, null).total());
         Path corrupt = folder.resolve("broken.json"); Files.writeString(corrupt, "{broken");
         assertThrows(Exception.class, () -> new CommunityService(mapper, catalog, corrupt.toString())); assertEquals("{broken", Files.readString(corrupt));
     }
@@ -233,7 +233,7 @@ class CommunityIntegrationTests {
         var original = new CommunityService(mapper, catalog, file.toString());
         var profile = original.saveProfile("old-token", new CommunityService.ProfileInput("기존여행자", "보리"));
         var inputs = places().stream().limit(2).map(p -> new CommunityService.StopInput(p.id(), p.latitude(), p.longitude())).toList();
-        String id = original.create("old-token", new CommunityService.CourseInput("기존 여행 코스", "재시작 후에도 보존하는 코스입니다.", "11", inputs)).course().id();
+        String id = original.create("old-token", new CommunityService.CourseInput("기존 여행 코스", "재시작 후에도 보존하는 코스입니다.", "11", inputs, null)).course().id();
         var old = mapper.readValue(Files.readString(file), CommunityService.Snapshot.class);
         Files.writeString(file, mapper.writeValueAsString(Map.of("accounts", old.accounts(), "courses", old.courses())));
         var service = new CommunityService(mapper, catalog, file.toString());

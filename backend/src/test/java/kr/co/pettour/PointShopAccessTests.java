@@ -40,7 +40,7 @@ class PointShopAccessTests {
         assertEquals(401, get("/api/shop/products", null).statusCode());
         assertEquals(401, get("/api/auth/shop/products", "daeng-session=invalid; daeng-community=profile-only").statusCode());
         var member = members.signIn(new KakaoLoginClient.User(777L, "상점 테스트"));
-        String token = sessions.signIn(member.id());
+        String token = sessions.signIn(member.member().id());
         var allowed = get("/api/auth/shop/products", "daeng-session=" + token);
         assertEquals(200, allowed.statusCode());
         assertTrue(allowed.body().contains("10000"));

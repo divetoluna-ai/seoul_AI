@@ -21,9 +21,14 @@ public class CommunityService {
     public record Account(String tokenHash, Profile profile) {}
     public record ProfileInput(String nickname, String petName) {}
     public record StopInput(String id, String latitude, String longitude) {}
-    public record CourseInput(String title, String content, String region, List<StopInput> stops) {}
+    public record WalkConditions(Integer minutes, Set<MemberStore.DogSize> sizes, Boolean stairs, Boolean shade, Boolean quiet) {
+        boolean matches(MemberStore.DogProfile dog) {
+            return minutes != null && minutes <= dog.walkMinutes() && sizes != null && sizes.contains(dog.size());
+        }
+    }
+    public record CourseInput(String title, String content, String region, List<StopInput> stops, WalkConditions walk) {}
     public record Course(String id, String authorId, String title, String content, String region,
-                         List<Place> stops, String createdAt, String updatedAt, Set<String> likes) {}
+                         List<Place> stops, String createdAt, String updatedAt, Set<String> likes, WalkConditions walk) {}
     public record PointEntry(String userId, String reason, String target, int amount, String createdAt) {}
     public record PointHistory(String reason, String target, double amount, String createdAt) {}
     public record NfcDay(String userId, String date, long millis) {}
@@ -46,7 +51,8 @@ public class CommunityService {
             nfcSessions = nfcSessions == null ? new ArrayList<>() : nfcSessions;
         }
     }
-    public record PublicCourse(String id, String title, String content, String region, List<Place> stops, String createdAt, String updatedAt) {}
+    public record PublicCourse(String id, String title, String content, String region, List<Place> stops, String createdAt, String updatedAt,
+                               WalkConditions walk) {}
     public record CourseView(PublicCourse course, Profile author, int likeCount, boolean mine, boolean liked) {}
     public record Feed(List<CourseView> items, long total, int page, int pageSize) {}
     private final ObjectMapper mapper;
@@ -131,10 +137,10 @@ public class CommunityService {
         if (!course.authorId.equals(user.id)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "내가 공유한 코스만 변경할 수 있어요.");
     }
     private CourseView view(Course p, Profile user) {
-        return new CourseView(new PublicCourse(p.id, p.title, p.content, p.region, p.stops, p.createdAt, p.updatedAt), author(p.authorId),
+        return new CourseView(new PublicCourse(p.id, p.title, p.content, p.region, p.stops, p.createdAt, p.updatedAt, p.walk), author(p.authorId),
             p.likes.size(), user != null && p.authorId.equals(user.id), user != null && p.likes.contains(user.id));
     }
-    public synchronized Feed feed(String token, String region, String keyword, String sort, int page, boolean mine) {
+    public synchronized Feed feed(String token, String region, String keyword, String sort, int page, boolean mine, MemberStore.DogProfile dog) {
         if (!Set.of("recent", "popular").contains(sort) || page < 1 || page > 10000 || keyword.length() > 60) throw bad("검색 조건을 확인해주세요.");
         if (!region.isEmpty()) region(region);
         var user = mine ? require(token) : me(token);
@@ -142,9 +148,17 @@ public class CommunityService {
         Comparator<Course> byRecent = Comparator.comparing(Course::createdAt).reversed().thenComparing(Course::id);
         var results = db.courses.stream().filter(p -> region.isEmpty() || p.region.equals(region))
             .filter(p -> !mine || p.authorId.equals(user.id))
+            .filter(p -> dog == null || (p.walk != null && p.walk.matches(dog)))
             .filter(p -> CombinedPlaceService.normalize(p.title + " " + p.content + " " + p.stops.stream().map(s -> s.name()+" "+s.address()).reduce("", (a,b) -> a+" "+b)).contains(q))
             .sorted(sort.equals("popular") ? Comparator.<Course>comparingInt(p -> p.likes.size()).reversed().thenComparing(byRecent) : byRecent).toList();
         return new Feed(results.stream().skip((long)(page - 1) * 12).limit(12).map(p -> view(p, user)).toList(), results.size(), page, 12);
+    }
+    private static WalkConditions walkConditions(WalkConditions walk) {
+        if (walk == null) return null;
+        if (walk.minutes == null || walk.minutes < 1 || walk.minutes > 600
+                || walk.sizes == null || walk.sizes.isEmpty() || walk.sizes.contains(null))
+            throw bad("산책 시간과 함께 걸을 수 있는 반려견 크기를 입력해주세요.");
+        return walk;
     }
     public synchronized CourseView detail(String token, String id) { return view(find(id), me(token)); }
     private static void region(String code) {
@@ -179,14 +193,14 @@ public class CommunityService {
         var user = require(token);
         String title = text(input.title, 2, 80, "코스 이름"), content = text(input.content, 5, 5000, "코스 소개");
         region(input.region); var stops = stops(input.stops); String time = now();
-        var course = new Course(id(), user.id, title, content, input.region, stops, time, time, new HashSet<>());
+        var course = new Course(id(), user.id, title, content, input.region, stops, time, time, new HashSet<>(), walkConditions(input.walk));
         return write(() -> { db.courses.add(course); return view(course, user); });
     }
     public synchronized CourseView update(String token, String id, CourseInput input) {
         var user = require(token); var old = find(id); own(old, user);
         String title = text(input.title, 2, 80, "코스 이름"), content = text(input.content, 5, 5000, "코스 소개");
         region(input.region); var stops = stops(input.stops);
-        var updated = new Course(old.id, old.authorId, title, content, input.region, stops, old.createdAt, now(), old.likes);
+        var updated = new Course(old.id, old.authorId, title, content, input.region, stops, old.createdAt, now(), old.likes, walkConditions(input.walk));
         return write(() -> { db.courses.set(db.courses.indexOf(old), updated); return view(updated, user); });
     }
     public synchronized CourseView like(String token, String id, boolean liked) {

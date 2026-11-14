@@ -38,6 +38,21 @@ class AuthSessionStoreTests {
         assertTrue(mapper.readTree(saved).path("attempts").isEmpty());
     }
 
+    @Test void restartPreservesDogSetupForTheLoginThatOpenedIt() throws Exception {
+        var attempt = open().begin(null, "community/dogs");
+        assertEquals("community/dogs", open().consume(attempt.token(), attempt.state()).section());
+
+        var store = open();
+        String first = store.signIn("member-1", true);
+        String second = store.signIn("member-1", true);
+        var reopened = open();
+        assertEquals(Boolean.TRUE, reopened.find(first).dogSetupPending());
+        reopened.completeDogSetup(first);
+        var afterDismissal = open();
+        assertEquals(Boolean.FALSE, afterDismissal.find(first).dogSetupPending());
+        assertEquals(Boolean.TRUE, afterDismissal.find(second).dogSetupPending());
+    }
+
     @Test void expiryIsEnforcedAfterRestartAndExpiredRecordsArePrunedOnWrites() throws Exception {
         var store = open();
         var attempt = store.begin(null, "explore"); String token = store.signIn("member-1");

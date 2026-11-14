@@ -39,9 +39,12 @@ public class CommunityController {
         return service.saveProfile(identity(request), input);
     }
     @GetMapping("/courses") public Feed courses(HttpServletRequest request,
-        @RequestParam(defaultValue="") String region, @RequestParam(defaultValue="") String keyword,
+        @RequestParam(defaultValue="") String region, @RequestParam(defaultValue="") String keyword, @RequestParam(defaultValue="") String dog,
         @RequestParam(defaultValue="recent") String sort, @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="false") boolean mine) {
-        return service.feed(identity(request), region, keyword, sort, page, mine);
+        var member = members.find(sessions.memberId(AuthController.browserToken(request)));
+        if (!dog.isEmpty() && member == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        var preferences = dog.isEmpty() ? null : members.dog(member, dog);
+        return service.feed(identity(request), region, keyword, sort, page, mine, preferences);
     }
     @GetMapping("/courses/{id}") public CourseView detail(HttpServletRequest request, @PathVariable String id) { return service.detail(identity(request), id); }
     @PostMapping(value="/courses", consumes=MediaType.APPLICATION_JSON_VALUE) @ResponseStatus(HttpStatus.CREATED)

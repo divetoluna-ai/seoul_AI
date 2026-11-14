@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { UserRound, X } from 'lucide-react';
 import kakaoLoginButton from './kakao-login.svg';
+import DogProfiles, { DogProfileForm, PublicDogProfile } from './DogProfiles';
+import { accountApi, AccountRequestError, type DogProfile, type DogInput } from './dog-profiles';
 import './account.css';
 import { useMemberProfile } from './MemberProfile';
 import type { MemberUser } from './member-profile';
@@ -9,6 +11,7 @@ type Session = {
   enabled: boolean;
   loginOrigin: string;
   user: { id: string; nickname: string } | null;
+  dogSetupPending: boolean;
 };
 
 const callbackErrors: Record<string, string> = {
@@ -19,7 +22,11 @@ const callbackErrors: Record<string, string> = {
   unavailable: '아직 카카오 로그인 설정이 완료되지 않았어요.',
 };
 
-export default function AccountMenu({ onSessionChange }: { onSessionChange: (loggedIn: boolean, user?: MemberUser | null) => void }) {
+export default function AccountMenu({ dogs, onDogsChange, onSessionChange }: {
+  onSessionChange: (loggedIn: boolean, user?: MemberUser | null) => void;
+  dogs: DogProfile[] | null;
+  onDogsChange: Dispatch<SetStateAction<DogProfile[] | null>>;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const { profile, openProfile } = useMemberProfile();
   const [session, setSession] = useState<Session | null>(null);
@@ -27,6 +34,30 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
   const [feedback, setFeedback] = useState('');
   const [retry, setRetry] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
+  const [skippingSetup, setSkippingSetup] = useState(false);
+  const [hideSetup, setHideSetup] = useState(false);
+  const [dogsError, setDogsError] = useState('');
+  const [hash, setHash] = useState(window.location.hash);
+  const publicDogId = /^#dog\/([a-f0-9-]{36})$/.exec(hash)?.[1];
+  const dogPage = hash === '#dogs' || hash === '#community/dogs';
+  const showDogSetup = Boolean(session?.user && session.dogSetupPending && dogPage && !publicDogId);
+
+  useEffect(() => {
+    const sync = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
+
+  useEffect(() => {
+    if ((dogPage || publicDogId || showDogSetup) && !dialog.current?.open) dialog.current?.showModal();
+  }, [dogPage, publicDogId, showDogSetup]);
+
+  function closeAccount() {
+    dialog.current?.close();
+    const current = window.location.hash;
+    if (current === '#community/dogs') window.location.hash = 'community';
+    if (current === '#dogs' || current.startsWith('#dog/')) window.location.hash = 'explore';
+  }
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -35,18 +66,21 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
     setFeedback(callbackErrors[result]);
     url.searchParams.delete('login');
     window.history.replaceState(window.history.state, '', url);
-    dialog.current?.showModal();
+    if (!dialog.current?.open) dialog.current?.showModal();
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     setSessionError('');
-    fetch('/api/auth/session', { credentials: 'same-origin', signal: controller.signal })
-      .then(response => {
-        if (!response.ok) throw new Error();
-        return response.json() as Promise<Session>;
+    accountApi<Session>('/session', 'GET', undefined, controller.signal)
+      .then(data => {
+        if (!controller.signal.aborted) {
+          setSession(data);
+          onSessionChange(!!data.user, data.user);
+          if (!data.user) onDogsChange(null);
+          if (data.dogSetupPending) setFeedback('');
+        }
       })
-      .then(value => { setSession(value); onSessionChange(!!value.user, value.user); })
       .catch(() => {
         if (!controller.signal.aborted) { setSession(null); onSessionChange(false); setSessionError('로그인 정보를 불러오지 못했어요.'); }
       });
@@ -62,17 +96,86 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
     return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('auth-session-expired', expired); document.removeEventListener('visibilitychange', visible); };
   }, [onSessionChange]);
 
+  useEffect(() => {
+    if (!session?.user || showDogSetup) return;
+    const abort = new AbortController();
+    setDogsError('');
+    accountApi<DogProfile[]>('/dogs', 'GET', undefined, abort.signal)
+      .then(data => { if (!abort.signal.aborted) onDogsChange(data); })
+      .catch(error => {
+        if (abort.signal.aborted) return;
+        if (error instanceof AccountRequestError && error.status === 401) {
+          onDogsChange(null);
+          onSessionChange(false);
+          setSession(current => current && { ...current, user: null });
+        } else setDogsError(error.message);
+      });
+    return () => abort.abort();
+  }, [session?.user, showDogSetup, retry, onDogsChange]);
+
+  function handleSessionExpiry(error: unknown) {
+    if (error instanceof AccountRequestError && error.status === 401) {
+      onDogsChange(null);
+      onSessionChange(false);
+      setSession(current => current && { ...current, user: null, dogSetupPending: false });
+      setFeedback('로그인 세션이 만료됐어요. 다시 로그인해주세요.');
+      return true;
+    }
+    return false;
+  }
+
+  async function saveDog(id: string, input: DogInput, hideReminder = false) {
+    try {
+      const path = id ? `/dogs/${id}` : hideReminder ? '/dogs?hideSetup=true' : '/dogs';
+      const dog = await accountApi<DogProfile>(path, id ? 'PUT' : 'POST', input);
+      onDogsChange(current => {
+        if (current === null) return null;
+        return id ? current.map(item => item.id === id ? dog : item) : [...current, dog];
+      });
+    } catch (error) {
+      handleSessionExpiry(error);
+      throw error;
+    }
+  }
+
+  async function changeDogVisibility(id: string, publicProfile: boolean) {
+    try {
+      const dog = await accountApi<DogProfile>(`/dogs/${id}/visibility`, 'PUT', { publicProfile });
+      onDogsChange(current => current?.map(item => item.id === id ? dog : item) ?? null);
+    } catch (error) {
+      handleSessionExpiry(error);
+      throw error;
+    }
+  }
+
+  function finishSetup() {
+    setHideSetup(false);
+    setSession(current => current && { ...current, dogSetupPending: false });
+    closeAccount();
+  }
+
+  async function skipSetup() {
+    setSkippingSetup(true);
+    setFeedback('');
+    try {
+      await accountApi(hideSetup ? '/dogs/skip-setup?hideSetup=true' : '/dogs/skip-setup', 'POST');
+      finishSetup();
+    } catch (error) {
+      if (!handleSessionExpiry(error)) setFeedback('건너뛰지 못했어요. 다시 시도해주세요.');
+    } finally {
+      setSkippingSetup(false);
+    }
+  }
+
   async function logout() {
     setFeedback('');
     setSigningOut(true);
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST', credentials: 'same-origin', headers: { 'X-Auth-Client': 'web' },
-      });
-      if (!response.ok) throw new Error();
-      setSession(current => current && { ...current, user: null });
+      await accountApi('/logout', 'POST');
+      onDogsChange(null);
       onSessionChange(false);
-      dialog.current?.close();
+      setSession(current => current && { ...current, user: null, dogSetupPending: false });
+      closeAccount();
     } catch {
       setFeedback('로그아웃하지 못했어요. 다시 시도해주세요.');
     } finally {
@@ -82,10 +185,10 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
 
   function showAccount() {
     setFeedback('');
-    dialog.current?.showModal();
+    if (!dialog.current?.open) dialog.current?.showModal();
   }
 
-  const section = window.location.hash.slice(1);
+  const section = hash.slice(1);
   const loginPath = `/api/auth/kakao?section=${encodeURIComponent(section)}`;
   const user = session?.user;
 
@@ -94,14 +197,25 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
       <UserRound size={17} aria-hidden="true" />
       <span>{profile?.nickname || user?.nickname || '로그인'}</span>
     </button>
-    <dialog ref={dialog} className="account-dialog" aria-labelledby="account-title">
-      <button type="button" className="dialog-close" aria-label="닫기" onClick={() => dialog.current?.close()}>
+    <dialog ref={dialog} className="account-dialog" aria-labelledby="account-title" onCancel={event => { event.preventDefault(); if (!showDogSetup) closeAccount(); }}>
+      {!showDogSetup && <button type="button" className="dialog-close" aria-label="닫기" onClick={closeAccount}>
         <X size={20} />
-      </button>
-      <h2 id="account-title">{user ? '내 계정' : '로그인 · 회원가입'}</h2>
+      </button>}
+      <h2 id="account-title">{showDogSetup ? '반려견 등록' : publicDogId ? '공개 반려견 프로필' : user ? '내 계정' : '로그인 · 회원가입'}</h2>
       {feedback && <p className="account-feedback" role="alert">{feedback}</p>}
-      {user ? <>
-        <p>{profile?.nickname || user.nickname}님, 카카오 계정으로 로그인했어요.</p><button type="button" className="primary-button" onClick={() => { dialog.current?.close(); openProfile(); }}>프로필 설정</button>
+      {showDogSetup ? <>
+        <p>반려견을 등록하면 맞춤 코스를 볼 수 있어요. 나중에 내 계정에서 등록해도 돼요.</p>
+        <DogProfileForm cancelLabel="건너뛰기" skipping={skippingSetup} onCancel={() => void skipSetup()}
+          reminder={{ hidden: hideSetup, onChange: setHideSetup }}
+          onSave={async input => { await saveDog('', input, hideSetup); finishSetup(); }}/>
+      </> : publicDogId ? <PublicDogProfile key={publicDogId} id={publicDogId}/> : user ? <>
+        <p>{profile?.nickname || user.nickname}님, 카카오 계정으로 로그인했어요.</p>
+        <button type="button" className="primary-button" onClick={() => { closeAccount(); openProfile(); }}>프로필 설정</button>
+        {!dogPage && <a className="course-outline" href="#dogs">반려견 맞춤 조건 관리</a>}
+        {dogPage && (dogs ? <DogProfiles dogs={dogs} onSave={saveDog} onVisibilityChange={changeDogVisibility}/> : dogsError ? <>
+          <p role="alert">{dogsError}</p>
+          <button type="button" className="course-outline" onClick={() => setRetry(value => value + 1)}>다시 시도</button>
+        </> : <p role="status">반려견 프로필을 불러오고 있어요…</p>)}
         <button type="button" className="secondary-button" disabled={signingOut} onClick={logout}>
           {signingOut ? '로그아웃 중…' : '로그아웃'}
         </button>
