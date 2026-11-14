@@ -44,7 +44,8 @@ public class CombinedPlaceService {
         String mode = client.isDemo() ? "local" : "live";
         String warning = "";
         if (!client.isDemo()) {
-            try { remote = tour.catalog(region); }
+            try { remote = tour.catalog(region).stream().filter(e -> PlaceQuality.allowed(e.place()))
+                .map(e -> new CatalogEntry(PlaceQuality.clean(e.place()), e.districtCode())).toList(); }
             catch (TourClient.TourUnavailableException ex) {
                 mode = "partial";
                 warning = "관광공사 API 연결이 지연되어 문화시설 자료와 동반가능 업소현황을 표시합니다. 잠시 후 다시 시도해주세요.";
@@ -64,6 +65,7 @@ public class CombinedPlaceService {
         var index = new HashMap<String, List<Place>>();
         var merged = new LinkedHashMap<String, Place>();
         for (var f : local) {
+            if (!PlaceQuality.allowed(f.place())) continue;
             if (district.isBlank() || f.district().equals(selectedDistrict) || addressContainsDistrict(f.place().address(), selectedDistrict)) {
                 merged.put(f.place().id(), f.place());
                 index.computeIfAbsent(normalize(f.place().name()), k -> new ArrayList<>()).add(f.place());
@@ -107,10 +109,13 @@ public class CombinedPlaceService {
     public Detail detail(String id) {
         if (!id.startsWith("csv-")) {
             var detail = tour.detail(id);
-            return withPlace(detail, ensureImage(detail.place(), detail.place()));
+            if (!PlaceQuality.allowed(detail.place())) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "여행 장소 제공 범위에 해당하지 않는 장소입니다.");
+            var place = PlaceQuality.clean(detail.place());
+            return withPlace(detail, ensureImage(place, place));
         }
         var local = csv.facility(id);
         Place place = local.place();
+        if (!PlaceQuality.allowed(place)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "여행 장소 제공 범위에 해당하지 않는 장소입니다.");
         if (!client.isDemo()) {
             try { place = ensureImage(place, matchingApi(place, tour.catalog(local.region()))); }
             catch (TourClient.TourUnavailableException ignored) { /* CSV details remain readable. */ }
@@ -118,7 +123,7 @@ public class CombinedPlaceService {
         return withPlace(local.detail(), photos == null ? place : photos.cached(place));
     }
     private Place matchingApi(Place local, List<CatalogEntry> remote) {
-        return remote.stream().map(CatalogEntry::place).filter(p -> samePlace(local, p))
+        return remote.stream().map(CatalogEntry::place).filter(PlaceQuality::allowed).filter(p -> samePlace(local, p))
             .sorted(Comparator.comparing((Place p) -> p.image().isBlank()).thenComparing(Place::id))
             .findFirst().orElse(null);
     }

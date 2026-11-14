@@ -20,21 +20,22 @@ class CsvFacilitiesTests {
             int excluded = 0;
             for (var count : report.path("excluded")) excluded += count.asInt();
             assertEquals(report.path("sourceRows").asInt(), records.size() + excluded);
-            assertEquals(11047, records.size());
-            assertEquals(8191, report.path("csvIncluded").asInt());
+            assertEquals(13283, records.size());
+            assertEquals(8190, report.path("csvIncluded").asInt());
             assertEquals(2908, report.path("registrySources").get(0).path("sourceRows").asInt());
-            assertEquals(2856, report.path("registrySources").get(0).path("added").asInt());
+            assertEquals(2848, report.path("registrySources").get(0).path("added").asInt());
             assertEquals(33, report.path("registrySources").get(0).path("merged_existing").asInt());
+            assertEquals(2245, report.path("supplementalSources").get(0).path("added").asInt());
+            assertEquals(5209, report.path("supplementalSources").get(1).path("duplicate_file").asInt());
             var ids = new HashSet<String>();
             for (var record : records) {
                 assertTrue(ids.add(record.path("id").asText()));
                 assertFalse(record.path("sourceCategory").asText().matches(".*(병원|약국).*"));
-                if (!record.path("source").asText().equals("xlsx"))
-                    assertFalse(record.path("name").asText().matches(".*(병원|약국).*"));
+                assertEquals("", PlaceQuality.exclusionReason(record.path("name").asText(), record.path("category").asText()));
                 assertFalse(record.path("name").asText().isBlank());
                 assertFalse(record.path("address").asText().isBlank());
-                if (record.path("source").asText().equals("xlsx")) {
-                    assertTrue(record.path("latitude").asText().isBlank());
+                if (record.path("latitude").asText().isBlank()) {
+                    assertTrue(Set.of("xlsx", "supplemental").contains(record.path("source").asText()));
                     assertTrue(record.path("longitude").asText().isBlank());
                 } else assertTrue(record.path("latitude").asDouble() >= 32);
             }
@@ -48,7 +49,7 @@ class CsvFacilitiesTests {
         when(client.isDemo()).thenReturn(true);
         var catalog = new CombinedPlaceService(tour, client, repo);
         var first = catalog.places("11", "", "all", "", "name", 1);
-        assertEquals(1800, first.total());
+        assertEquals(1814, first.total());
         assertEquals("local", first.mode());
         assertEquals(9, first.items().size());
         var second = catalog.places("11", "", "all", "", "name", 2);
@@ -97,7 +98,7 @@ class CsvFacilitiesTests {
         var catalog = new CombinedPlaceService(tour, client, repo);
         var result = catalog.places("11", "", "all", "", "recent", 1);
         assertEquals("partial", result.mode());
-        assertEquals(1800, result.total());
+        assertEquals(1814, result.total());
         assertFalse(result.warning().isBlank());
     }
 
@@ -159,7 +160,8 @@ class CsvFacilitiesTests {
         when(client.isDemo()).thenReturn(true);
         var catalog = new CombinedPlaceService(mock(TourService.class), client, repo);
         var place = repo.inRegion("11").stream().map(CsvFacilities.Facility::place)
-            .filter(p -> p.source().equals("xlsx")).findFirst().orElseThrow();
+            .filter(p -> p.source().equals("xlsx") && p.latitude().isBlank() && repo.detail(p.id()).hours().isBlank()
+                && repo.detail(p.id()).animals().isBlank() && repo.detail(p.id()).requirements().isBlank()).findFirst().orElseThrow();
         var found = catalog.places("11", "", "restaurant", place.name(), "name", 1);
         assertTrue(found.items().stream().anyMatch(p -> p.id().equals(place.id())));
         var detail = catalog.detail(place.id());

@@ -24,7 +24,7 @@ class NfcPointsTests {
     }
     CommunityService service() throws Exception {
         var service = new CommunityService(mapper, null, root.resolve("community.json").toString(), clock);
-        service.saveProfile("a", new ProfileInput("보리네", "보리", "11", ""));
+        service.saveProfile("a", new ProfileInput("보리네", "보리"));
         return service;
     }
     @Test void hourlyRatePauseResumeAndRestartPreserveFractions() throws Exception {
@@ -62,9 +62,9 @@ class NfcPointsTests {
     }
     @Test void dailyCapIsIndependentOfCommunityPointsAndUsers() throws Exception {
         var service = service(); String userId = service.me("a").id();
-        service.saveProfile("b", new ProfileInput("다른이웃", "콩이", "11", ""));
+        service.saveProfile("b", new ProfileInput("다른이웃", "콩이"));
         Path file = root.resolve("community.json"); var old = mapper.readValue(Files.readString(file), Snapshot.class);
-        var seeded = new Snapshot(old.accounts(), old.posts(), old.comments(), old.conversations(), old.messages(),
+        var seeded = new Snapshot(old.accounts(), old.courses(),
             new ArrayList<>(List.of(new PointEntry(userId, "share", "test", 10, clock.instant().toString()))), old.shares(),
             new ArrayList<>(List.of(new NfcDay(userId, "2026-11-14", NFC_DAY_MS - 1000))), new ArrayList<>());
         Files.writeString(file, mapper.writeValueAsString(seeded));
@@ -78,7 +78,7 @@ class NfcPointsTests {
         var service = service();
         assertThrows(ResponseStatusException.class, () -> service.nfcProximity(null, true));
         assertThrows(ResponseStatusException.class, () -> service.nfcHeartbeat(null));
-        service.saveProfile("b", new ProfileInput("이름없는이웃", "", "11", ""));
+        service.saveProfile("b", new ProfileInput("이름없는이웃", ""));
         assertThrows(ResponseStatusException.class, () -> service.nfcProximity("b", true));
         service.nfcProximity("a", true); clock.advance(5000);
         Path file = root.resolve("community.json"); Files.delete(file); Files.createDirectory(file); Files.writeString(file.resolve("block"), "block replacement");

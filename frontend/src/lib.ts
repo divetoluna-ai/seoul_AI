@@ -1,4 +1,5 @@
 import { coordinatesOf } from './trip.ts';
+import { isAllowedPlace } from './place-quality.ts';
 
 export type Region = { code: string; name: string };
 export type Place = { id: string; name: string; category: string; address: string; image: string; phone: string; longitude: string; latitude: string; modified: string; source?: string; imageSource?: string; imagePage?: string; imageCollectedAt?: string };
@@ -9,6 +10,7 @@ export const categoryLabels: Record<string, string> = {
   course: '여행코스', leisure: '레포츠', stay: '숙박', shopping: '쇼핑', restaurant: '음식점·카페', care: '미용·돌봄',
 };
 export function sourceLabel(place: Place) {
+  if (place.source === 'supplemental') return '추가 반려동물 동반 CSV';
   if (place.source === 'xlsx') return '반려동물 동반가능 업소현황';
   if (place.source === 'csv+xlsx') return '한국문화정보원 · 동반가능 업소현황';
   return place.source === 'csv' ? '한국문화정보원 CSV' : '한국관광공사 API';
@@ -56,6 +58,6 @@ export function directionsUrl(place: MapPlace): string | null {
 export function loadSaved(): Place[] {
   try {
     const data: unknown = JSON.parse(localStorage.getItem('daeng-places') || '[]');
-    return Array.isArray(data) ? data.filter((p): p is Place => p && typeof p.id === 'string' && !p.id.startsWith('demo-') && typeof p.name === 'string' && typeof p.address === 'string' && typeof p.image === 'string').slice(0, 200) : [];
+    return Array.isArray(data) ? data.filter((p): p is Place => p && typeof p.id === 'string' && !p.id.startsWith('demo-') && typeof p.name === 'string' && typeof p.address === 'string' && typeof p.image === 'string' && isAllowedPlace(p)).slice(0, 200) : [];
   } catch { return []; }
 }

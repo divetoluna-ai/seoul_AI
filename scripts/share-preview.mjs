@@ -26,20 +26,15 @@ const server = http.createServer(async (req, res) => {
     const communityRoutes = [
       [/^\/api\/places\/(?:[0-9]{1,20}|csv-[a-f0-9]{20})\/kakao-photo$/, ['POST']],
       [/^\/api\/community\/profile$/, ['GET', 'HEAD', 'POST']],
+      [/^\/api\/community\/courses$/, ['GET', 'HEAD', 'POST']],
+      [new RegExp(`^/api/community/courses/${identifier}$`), ['GET', 'HEAD', 'PUT', 'DELETE']],
+      [new RegExp(`^/api/community/courses/${identifier}/like$`), ['PUT']],
       [/^\/api\/community\/points$/, ['GET', 'HEAD']],
       [/^\/api\/community\/nfc\/proximity$/, ['PUT']],
       [/^\/api\/community\/nfc\/heartbeat$/, ['POST']],
       [/^\/api\/community\/shares$/, ['POST']],
       [new RegExp(`^/api/community/shares/${identifier}$`), ['GET', 'HEAD']],
       [new RegExp(`^/api/community/shares/${identifier}/complete$`), ['PUT']],
-      [/^\/api\/community\/posts$/, ['GET', 'HEAD', 'POST']],
-      [new RegExp(`^/api/community/posts/${identifier}$`), ['GET', 'HEAD', 'DELETE']],
-      [new RegExp(`^/api/community/posts/${identifier}/(?:like|join|status)$`), ['PUT']],
-      [new RegExp(`^/api/community/posts/${identifier}/comments$`), ['POST']],
-      [new RegExp(`^/api/community/posts/${identifier}/comments/${identifier}$`), ['DELETE']],
-      [/^\/api\/community\/conversations$/, ['GET', 'HEAD', 'POST']],
-      [new RegExp(`^/api/community/conversations/${identifier}$`), ['GET', 'HEAD']],
-      [new RegExp(`^/api/community/conversations/${identifier}/messages$`), ['POST']],
     ];
     const route = communityRoutes.find(([pattern]) => pattern.test(url.pathname));
     if (!readOnly && !route) return fail(res, 404, '경로를 찾을 수 없습니다.');

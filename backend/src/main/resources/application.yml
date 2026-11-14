@@ -18,7 +18,7 @@ kakao:
     cache-file: ${KAKAO_PHOTOS_CACHE_FILE:./data/kakao-photos.json}
     min-interval-ms: ${KAKAO_PHOTOS_MIN_INTERVAL_MS:1100}
 community:
-  store: ${COMMUNITY_STORE:./data/community.json}
+  store: ${COMMUNITY_STORE:./data/course-community.json}
 logging:
   level:
     org.springframework.web.client: WARN

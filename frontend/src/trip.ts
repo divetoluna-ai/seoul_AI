@@ -1,4 +1,5 @@
 import type { Place } from './lib.ts';
+import { isAllowedPlace } from './place-quality.ts';
 
 export type Coordinate = { latitude: number; longitude: number };
 export type RoadRoute = {
@@ -28,7 +29,7 @@ export function loadTrip(): Place[] {
     return data.filter((p): p is Place => {
       if (!p || typeof p.id !== 'string' || p.id.startsWith('demo-') || seen.has(p.id) ||
           typeof p.name !== 'string' || typeof p.address !== 'string' ||
-          typeof p.category !== 'string' || typeof p.image !== 'string' || !coordinatesOf(p)) return false;
+          typeof p.category !== 'string' || typeof p.image !== 'string' || !coordinatesOf(p) || !isAllowedPlace(p)) return false;
       seen.add(p.id);
       return true;
     }).slice(0, MAX_STOPS);
