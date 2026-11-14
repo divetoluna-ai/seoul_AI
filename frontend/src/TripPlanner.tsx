@@ -6,6 +6,7 @@ import { coordinatesOf, fetchRoadRoute, formatDistance, formatDuration, MAX_STOP
 import TripMap from './KakaoTripMap';
 import './trip.css';
 import ShareTrip from './ShareTrip';
+import TripTravelMode from './TripTravelMode';
 
 export default function TripPlanner({ loggedIn, stops, onChange, onBrowse, onShare }: { loggedIn: boolean; stops: Place[]; onChange: (stops: Place[]) => void; onBrowse: () => void; onShare: () => void }) {
   const [origin, setOrigin] = useState<Coordinate | null>(null);
@@ -79,7 +80,7 @@ export default function TripPlanner({ loggedIn, stops, onChange, onBrowse, onSha
   };
 
   return <section className="trip-planner" aria-labelledby="trip-heading">
-    <div className="trip-heading"><div><div className="eyebrow">OUR LITTLE ITINERARY</div><h2 id="trip-heading">좋아하는 곳을 잇는, 우리만의 코스 <Route size={23}/></h2><p>음식점, 카페, 숙소를 담으면 방문 순서대로 자동차 경로가 펼쳐져요.</p></div><span className="trip-mode"><Car size={15}/> 자동차 이동</span></div>
+    <div className="trip-heading"><div><div className="eyebrow">OUR LITTLE ITINERARY</div><h2 id="trip-heading">좋아하는 곳을 잇는, 우리만의 코스 <Route size={23}/></h2><p>음식점, 카페, 숙소를 담으면 방문 순서대로 자동차 경로가 펼쳐져요.</p></div><TripTravelMode/></div>
     <div className="trip-layout"><div className="trip-sidebar">
       <div className="trip-list-heading"><h3><Navigation size={17}/> 나의 여행 코스 <span>{stops.length}/{MAX_STOPS}</span></h3>{stops.length > 0 && <button onClick={() => onChange([])} aria-label="여행 코스 전체 비우기"><Trash2 size={14}/> 비우기</button>}</div>
       <button className={`trip-locate ${origin ? 'located' : ''}`} onClick={locate} disabled={locating}>{locating ? <LoaderCircle size={16} className="spin"/> : origin ? <Check size={16}/> : <LocateFixed size={16}/>} {locating ? '현재 위치 확인 중…' : origin ? '현재 위치에서 출발' : '현재 위치를 출발점으로'}</button>

@@ -208,7 +208,7 @@ function App() {
       </div>
     </div></header>
     {showShop && !avatar && <PointShop/>}
-    {avatar && <AvatarStudio/>}
+    {avatar && <AvatarStudio user={memberUser} dogs={dogs} authReady={authReady}/>}
     {community && !showShop && !avatar && <Community loggedIn={loggedIn} dogs={dogs} regions={regions} tripStops={tripStops} initialRegion={region} shareRequest={shareRequest} onShareHandled={() => setShareRequest(0)} onImportCourse={importCourse} onBrowse={browseFromCommunity}/>}
     <main hidden={community || showShop || avatar}>
       <section className="hero"><div className="container hero-inner">
