@@ -8,6 +8,8 @@ import re
 import unicodedata
 from collections import Counter
 from registry_facilities import merge_registries
+from supplemental_facilities import merge_supplemental
+from place_quality import display_name, exclusion_reason, RULES, RULES_PATH
 
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = ROOT / 'backend/src/main/resources'
@@ -32,8 +34,9 @@ def main():
     with SOURCE.open(encoding='utf-8-sig', newline='') as f:
         rows = list(csv.DictReader(f))
     rejected = Counter()
+    audit = []
     facilities = {}
-    for raw in rows:
+    for number, raw in enumerate(rows, 2):
         r = {key: clean(value) for key, value in raw.items()}
         if any(term in r['카테고리2'] + r['카테고리3'] for term in ('의료','약국','병원')) or any(term in r['시설명'] for term in ('약국','병원')):
             rejected['medical'] += 1
@@ -44,8 +47,15 @@ def main():
         region = REGIONS.get(r['시도 명칭'])
         address = r['도로명주소'] or r['지번주소']
         category = CATEGORIES.get(r['카테고리3'])
+        if r['카테고리3'] == '반려동물용품' and re.search(RULES['humanBeautyNamePattern'], r['시설명']):
+            category = 'care'
         if not region or not category or not r['시설명'] or not address:
             rejected['missing_required'] += 1
+            continue
+        reason = exclusion_reason(r['시설명'], category)
+        if reason:
+            rejected[reason] += 1
+            audit.append(dict(source=SOURCE.name, row=number, name=r['시설명'], category=r['카테고리3'], reason=reason))
             continue
         try:
             latitude, longitude = float(r['위도']), float(r['경도'])
@@ -63,7 +73,7 @@ def main():
         if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', stamp):
             stamp = ''
         phone = '' if r['전화번호'] in ('없음','-') else r['전화번호']
-        facility = dict(id=identifier, name=r['시설명'], category=category, region=region,
+        facility = dict(id=identifier, name=display_name(r['시설명']), category=category, region=region,
                         district=district, address=address, latitude=str(latitude), longitude=str(longitude),
                         phone=phone, modified=stamp, overview=r['기본 정보_장소설명'],
                         hours=r['운영시간'], restDay=r['휴무일'],
@@ -82,13 +92,16 @@ def main():
                 continue
         facilities[key] = facility
     csv_included = len(facilities)
-    registry_reports, registry_excluded = merge_registries(facilities, RESOURCES.glob('반려동물_동반가능_업소현황*.xlsx'))
+    registry_reports, registry_excluded = merge_registries(facilities, RESOURCES.glob('반려동물_동반가능_업소현황*.xlsx'), audit)
     rejected.update(registry_excluded)
-    source_rows = len(rows) + sum(r['sourceRows'] for r in registry_reports)
+    supplemental_reports, supplemental_excluded = merge_supplemental(facilities, RESOURCES.glob('반려동물_동반가능_업소*.csv'), audit)
+    rejected.update(supplemental_excluded)
+    source_rows = len(rows) + sum(r['sourceRows'] for r in registry_reports) + sum(r['sourceRows'] for r in supplemental_reports)
     output = sorted(facilities.values(), key=lambda r: r['id'])
     report = dict(source=SOURCE.name, sourceSha256=hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
                   sourceRows=source_rows, csvSourceRows=len(rows), csvIncluded=csv_included,
-                  registrySources=registry_reports, excluded=dict(rejected), included=len(output),
+                  registrySources=registry_reports, supplementalSources=supplemental_reports,
+                  qualityExcluded=len(audit), excluded=dict(rejected), included=len(output),
                   byCategory=dict(sorted(Counter(r['category'] for r in output).items())),
                   byRegion=dict(sorted(Counter(r['region'] for r in output).items())),
                   rules=['Exclude medical categories and facility names containing hospital/pharmacy',
@@ -96,11 +109,16 @@ def main():
                          'Normalize whitespace, null markers, province codes and coordinates',
                          'Deduplicate normalized name and address; prefer the newest complete record',
                          'Include user-supplied registry workbooks; merge an unambiguous name and street match',
-                         'Keep missing registry coordinates empty; resolve addresses on explicit course selection'])
+                         'Merge supplemental pet-friendly CSVs and skip byte-identical files',
+                         'Use shared category, business and corrupted-name exclusions for imports and live API results',
+                         'Decode name HTML entities; retain legitimate short, numeric and foreign-language brands',
+                         'Keep missing coordinates and source dates empty; enrich only from matching supplied records'])
     dest = RESOURCES / 'data'
     dest.mkdir(exist_ok=True)
     (dest/'facilities.json').write_text(json.dumps(output, ensure_ascii=False, separators=(',',':')), encoding='utf-8')
     (dest/'facilities-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    (dest/'facilities-exclusions.json').write_text(json.dumps(audit, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    (ROOT/'frontend/src/place-quality-rules.json').write_bytes(RULES_PATH.read_bytes())
     assert source_rows == len(output) + sum(rejected.values())
     print(json.dumps(report, ensure_ascii=True))
 

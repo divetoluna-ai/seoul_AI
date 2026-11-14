@@ -7,6 +7,7 @@ import unicodedata
 from collections import Counter
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
+from place_quality import display_name, exclusion_reason
 
 NS = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 REGIONS = {
@@ -96,7 +97,7 @@ def read_registry(path):
         return output
 
 
-def merge_registries(facilities, paths):
+def merge_registries(facilities, paths, audit=None):
     """Preserve existing identities and details; never guess coordinates or business conditions."""
     index = {}
     for key, record in facilities.items():
@@ -109,10 +110,16 @@ def merge_registries(facilities, paths):
         stamp = '-'.join(stamp_match.groups()) if stamp_match else ''
         stats = Counter()
         seen = set()
-        for row in rows:
-            name, address, source_type = row['업소명'], row['업소주소'], row['업종']
+        for number, row in enumerate(rows, 2):
+            name, address, source_type = display_name(row['업소명']), row['업소주소'], row['업종']
             if not name or not address or source_type not in TYPES:
                 stats['missing_or_unsupported'] += 1
+                continue
+            reason = exclusion_reason(row['업소명'], 'restaurant')
+            if reason:
+                stats[reason] += 1
+                if audit is not None:
+                    audit.append(dict(source=path.name, row=number, name=row['업소명'], category=source_type, reason=reason))
                 continue
             searchable_address = search_address(address)
             first = searchable_address.split(' ')[0]

@@ -1,0 +1,135 @@
+[
+  {
+    "source": "한국문화정보원_전국 반려동물 동반 가능 문화시설 위치 데이터_20250324.csv",
+    "row": 54206,
+    "name": "천국의놀이터 반려동물장례식장",
+    "category": "위탁관리",
+    "reason": "unrelated_business"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 314,
+    "name": "카페 ?잔",
+    "category": "일반음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 524,
+    "name": "?커피,MOCC",
+    "category": "휴게음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 1235,
+    "name": "우?(WooDic)",
+    "category": "일반음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 1653,
+    "name": "잇?(IT COF.)",
+    "category": "일반음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 1823,
+    "name": "?파크",
+    "category": "일반음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 1959,
+    "name": "율?당",
+    "category": "휴게음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 1969,
+    "name": "카페 드 조?",
+    "category": "휴게음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+    "row": 2587,
+    "name": "프?츠",
+    "category": "일반음식점",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 1284,
+    "name": "잇?(IT COF.)",
+    "category": "식당",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 1475,
+    "name": "카페 드 조?",
+    "category": "카페",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 1708,
+    "name": "율?당",
+    "category": "식음료",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 2077,
+    "name": "?파크",
+    "category": "식당",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 3330,
+    "name": "?커피,MOCC",
+    "category": "카페",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 3747,
+    "name": "카페 ?잔",
+    "category": "카페",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 3844,
+    "name": "우?(WooDic)",
+    "category": "식당",
+    "reason": "invalid_name"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 3984,
+    "name": "스튜디오 팝콘",
+    "category": "기타",
+    "reason": "unrelated_category"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 4046,
+    "name": "키다리아저씨사진관 부평점",
+    "category": "기타",
+    "reason": "unrelated_category"
+  },
+  {
+    "source": "반려동물_동반가능_업소1.csv",
+    "row": 4588,
+    "name": "프?츠",
+    "category": "식당",
+    "reason": "invalid_name"
+  }
+]

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Clock3, Heart, ImagePlus, Info, LoaderCircle, MapPin, MessageCircle, PawPrint, Plus, Search, Send, ShoppingBag, Sprout, Trash2, Users, X } from 'lucide-react';
-import { api, type Region } from './lib';
-import { communityApi as request, communityCategories as categories, communityDate as date, postPrice, postStatus, preparePhoto, type CommunityCategory, type CommunityPost, type Profile, type PostView, type PostDetail, type Feed, type Conversation, type ConversationDetail } from './community-api';
+import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Heart, Info, LoaderCircle, MapPin, PawPrint, Pencil, Plus, Route, Search, Share2, Trash2, X } from 'lucide-react';
+import { categoryLabel, mapUrl, photoCredit, photoPage, safeImage, type Place, type Region } from './lib';
+import { communityApi as request, communityDate, courseIdFromHash, courseInput, courseShareUrl, type Profile, type CourseView, type CourseFeed } from './community-api';
+import { MAX_STOPS } from './trip';
+import CoursePreview from './CoursePreview';
 import './community.css';
 import PointsPanel from './PointsPanel';
 
@@ -9,153 +11,158 @@ function Modal({ title, close, children, wide = false }: { title: string; close:
   const ref = useRef<HTMLDialogElement>(null);
   const callback = useRef(close); callback.current = close;
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
-  return <dialog ref={ref} className={`community-modal ${wide ? 'community-modal-wide' : ''}`} aria-label={title} onCancel={e => { e.preventDefault(); callback.current(); }} onClick={e => { if (e.target === e.currentTarget) callback.current(); }}>
-    <div className="community-modal-heading"><h2>{title}</h2><button type="button" onClick={close} aria-label={`${title} 닫기`}><X size={21}/></button></div>{children}
+  return <dialog ref={ref} className={`course-modal ${wide ? 'course-modal-wide' : ''}`} aria-label={title}
+    onCancel={e => { e.preventDefault(); callback.current(); }} onClick={e => { if (e.target === e.currentTarget) callback.current(); }}>
+    <div className="course-modal-heading"><h2>{title}</h2><button type="button" onClick={close} aria-label={`${title} 닫기`}><X size={20}/></button></div>{children}
   </dialog>;
 }
-const icons = { info: Sprout, walk: Users, market: ShoppingBag };
-function Badge({ category }: { category: CommunityCategory }) { const Icon = icons[category]; return <span className={`community-badge ${category}`}><Icon size={13}/>{categories[category]}</span>; }
-function Avatar({ name }: { name: string }) { return <span className="community-avatar" aria-hidden="true">{name.slice(0, 1)}</span>; }
-function ErrorMessage({ message }: { message: string }) { return message ? <p className="community-error" role="alert"><Info size={16}/>{message}</p> : null; }
-const initialPost = { category: 'info' as CommunityCategory, title: '', content: '', region: '11', district: '', tradeType: 'sale', price: '', image: '', meetingAt: '', meetingPlace: '', capacity: '4' };
+function ErrorMessage({ message }: { message: string }) { return message ? <p className="course-error" role="alert"><Info size={16}/>{message}</p> : null; }
+function CourseStops({ stops, onChange }: { stops: Place[]; onChange?: (p: Place[]) => void }) {
+  const move = (i: number, direction: number) => {
+    const next = [...stops]; [next[i], next[i + direction]] = [next[i + direction], next[i]]; onChange?.(next);
+  };
+  return <ol className="course-stops">{stops.map((p, i) => <li key={p.id}>
+    <span className="course-stop-number">{i + 1}</span><div><small>{i === 0 ? '출발' : i === stops.length - 1 ? '도착' : '경유'} · {categoryLabel(p.category)}</small><strong>{p.name}</strong><p>{p.address}</p>
+      {!onChange && <a href={mapUrl(p)} target="_blank" rel="noreferrer">카카오맵에서 보기 ↗</a>}</div>
+    {onChange && <div className="course-stop-edit"><button type="button" disabled={i === 0} aria-label={`${p.name} 앞으로`} onClick={() => move(i, -1)}><ArrowUp size={14}/></button><button type="button" disabled={i === stops.length - 1} aria-label={`${p.name} 뒤로`} onClick={() => move(i, 1)}><ArrowDown size={14}/></button><button type="button" disabled={stops.length <= 2} aria-label={`${p.name} 삭제`} onClick={() => onChange(stops.filter(s => s.id !== p.id))}><X size={14}/></button></div>}
+  </li>)}</ol>;
+}
 
-export default function Community({ regions }: { regions: Region[] }) {
+export default function Community({ regions, tripStops, initialRegion, shareRequest, onShareHandled, onImportCourse, onBrowse }: {
+  regions: Region[]; tripStops: Place[]; initialRegion: string; shareRequest: number; onShareHandled: () => void; onImportCourse: (p: Place[]) => void; onBrowse: () => void;
+}) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileReady, setProfileReady] = useState(false);
-  const profileRef = useRef(profile); profileRef.current = profile;
   const [profileOpen, setProfileOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ nickname: '', petName: '', region: '11', district: '' });
-  const [profileDistricts, setProfileDistricts] = useState<Region[]>([]);
+  const [profileForm, setProfileForm] = useState({ nickname: '', petName: '' });
   const afterProfile = useRef<(() => void) | null>(null);
-  const [category, setCategory] = useState('all');
   const [region, setRegion] = useState('');
-  const [district, setDistrict] = useState('');
-  const [districts, setDistricts] = useState<Region[]>([]);
   const [draft, setDraft] = useState('');
   const [keyword, setKeyword] = useState('');
   const [sort, setSort] = useState('recent');
   const [mine, setMine] = useState(false);
   const [page, setPage] = useState(1);
-  const [feed, setFeed] = useState<Feed | null>(null);
+  const [feed, setFeed] = useState<CourseFeed | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedError, setFeedError] = useState('');
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
   const [toast, setToast] = useState('');
   const [composer, setComposer] = useState(false);
-  const [postForm, setPostForm] = useState(initialPost);
-  const [postDistricts, setPostDistricts] = useState<Region[]>([]);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const [selected, setSelected] = useState('');
-  const [detail, setDetail] = useState<PostDetail | null>(null);
-  const [comment, setComment] = useState('');
+  const [editing, setEditing] = useState('');
+  const [form, setForm] = useState({ title: '', content: '', region: initialRegion });
+  const [composeStops, setComposeStops] = useState<Place[]>([]);
+  const [selected, setSelected] = useState(() => courseIdFromHash(window.location.hash));
+  const [detail, setDetail] = useState<CourseView | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [inbox, setInbox] = useState(false);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [chatId, setChatId] = useState('');
-  const [chat, setChat] = useState<ConversationDetail | null>(null);
-  const [message, setMessage] = useState('');
-  const [inboxLoading, setInboxLoading] = useState(false);
-  const messageEnd = useRef<HTMLDivElement>(null);
-  const regionName = (code: string) => regions.find(r => r.code === code)?.name || '서울';
-  const location = (p: { region: string; district: string }) => `${regionName(p.region)} ${p.district}`.trim();
+  const [replaceConfirm, setReplaceConfirm] = useState(false);
+  const handledShare = useRef(0);
+  const options = regions.length ? regions : [{ code: '11', name: '서울' }];
+  const regionName = (code: string) => options.find(r => r.code === code)?.name || code;
 
-  useEffect(() => { const abort = new AbortController(); request<{ profile: Profile | null }>('/profile', 'GET', undefined, abort.signal)
-    .then(data => setProfile(data.profile)).catch(e => { if (e.name !== 'AbortError') setFeedError(e.message); })
-    .finally(() => { if (!abort.signal.aborted) setProfileReady(true); }); return () => abort.abort(); }, [revision]);
-  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3500); return () => clearTimeout(timer); }, [toast]);
+  useEffect(() => {
+    const abort = new AbortController();
+    request<{ profile: Profile | null }>('/profile', 'GET', undefined, abort.signal).then(data => setProfile(data.profile))
+      .catch(e => { if (!abort.signal.aborted) setError(e.message); }).finally(() => { if (!abort.signal.aborted) setProfileReady(true); });
+    return () => abort.abort();
+  }, []);
+  useEffect(() => {
+    const sync = () => { setSelected(courseIdFromHash(window.location.hash)); setError(''); setDeleteConfirm(false); setReplaceConfirm(false); };
+    window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync);
+  }, []);
   useEffect(() => {
     const abort = new AbortController(); setLoading(true); setFeedError('');
-    const params = new URLSearchParams({ category, region, district, keyword, sort, mine: String(mine), page: String(page) });
-    request<Feed>(`/posts?${params}`, 'GET', undefined, abort.signal).then(setFeed).catch(e => { if (e.name !== 'AbortError') setFeedError(e.message); })
-      .finally(() => { if (!abort.signal.aborted) setLoading(false); }); return () => abort.abort();
-  }, [category, region, district, keyword, sort, mine, page, revision]);
-  useEffect(() => {
-    const abort = new AbortController(); setDistricts([]); if (region) api<Region[]>(`/districts?region=${region}`, abort.signal).then(setDistricts).catch(e => { if (e.name !== 'AbortError') setFeedError('동네 목록을 불러오지 못했어요. 새로고침해 다시 시도해주세요.'); });
+    const params = new URLSearchParams({ region, keyword, sort, mine: String(mine), page: String(page) });
+    request<CourseFeed>(`/courses?${params}`, 'GET', undefined, abort.signal).then(setFeed)
+      .catch(e => { if (!abort.signal.aborted) setFeedError(e.message); }).finally(() => { if (!abort.signal.aborted) setLoading(false); });
     return () => abort.abort();
-  }, [region, revision]);
+  }, [region, keyword, sort, mine, page, revision]);
   useEffect(() => {
-    if (!profileOpen) return; const abort = new AbortController(); setProfileDistricts([]);
-    api<Region[]>(`/districts?region=${profileForm.region}`, abort.signal).then(setProfileDistricts).catch(e => { if (e.name !== 'AbortError') setError('동네 목록을 불러오지 못했어요. 잠시 후 다시 열어주세요.'); });
+    if (!selected) { setDetail(null); return; }
+    const abort = new AbortController(); setDetailLoading(true);
+    setDetail(current => current?.course.id === selected ? current : null);
+    request<CourseView>(`/courses/${selected}`, 'GET', undefined, abort.signal).then(setDetail)
+      .catch(e => { if (!abort.signal.aborted) setError(e.message); }).finally(() => { if (!abort.signal.aborted) setDetailLoading(false); });
     return () => abort.abort();
-  }, [profileForm.region, profileOpen]);
+  }, [selected, revision]);
+  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3500); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => {
-    if (!composer) return; const abort = new AbortController(); setPostDistricts([]);
-    api<Region[]>(`/districts?region=${postForm.region}`, abort.signal).then(setPostDistricts).catch(e => { if (e.name !== 'AbortError') setError('동네 목록을 불러오지 못했어요. 잠시 후 다시 열어주세요.'); });
-    return () => abort.abort();
-  }, [postForm.region, composer]);
-  useEffect(() => {
-    if (!selected || busy) return;
-    const abort = new AbortController();
-    const load = () => request<PostDetail>(`/posts/${selected}`, 'GET', undefined, abort.signal).then(setDetail).catch(e => { if (e.name !== 'AbortError') setError(e.message); });
-    void load(); const timer = setInterval(load, 10000); return () => { abort.abort(); clearInterval(timer); };
-  }, [selected, revision, busy]);
-  useEffect(() => {
-    if (!inbox || !profile || busy) return;
-    const abort = new AbortController(); setInboxLoading(true);
-    const load = async () => {
-      try {
-        const list = await request<Conversation[]>('/conversations', 'GET', undefined, abort.signal); if (!abort.signal.aborted) setConversations(list);
-        if (chatId) { const data = await request<ConversationDetail>(`/conversations/${chatId}`, 'GET', undefined, abort.signal); if (!abort.signal.aborted) setChat(data); }
-      } catch (e) { if (!abort.signal.aborted) setError((e as Error).message); }
-      finally { if (!abort.signal.aborted) setInboxLoading(false); }
-    };
-    void load(); const timer = setInterval(load, 4000); return () => { abort.abort(); clearInterval(timer); };
-  }, [inbox, profile?.id, chatId, revision, busy]);
-  const messageCount = chat?.messages.length || 0;
-  useEffect(() => { messageEnd.current?.scrollIntoView({ block: 'nearest' }); }, [messageCount, chatId]);
+    if (!shareRequest || !profileReady || handledShare.current === shareRequest) return;
+    handledShare.current = shareRequest; onShareHandled(); startCreate();
+  }, [shareRequest, profileReady]);
 
-  function openProfile(next?: () => void) { setError(''); afterProfile.current = next || null; setProfileForm(profile ? { nickname: profile.nickname, petName: profile.petName, region: profile.region, district: profile.district } : { nickname: '', petName: '', region: region || '11', district }); setProfileOpen(true); }
+  function closeCourse() { if (busy) return; setSelected(''); window.location.hash = 'community'; setError(''); }
+  function openCourse(id: string) { setSelected(id); window.location.hash = `community/course/${id}`; setError(''); setDeleteConfirm(false); setReplaceConfirm(false); }
+  function openProfile(next?: () => void) { setError(''); afterProfile.current = next || null; setProfileForm({ nickname: profile?.nickname || '', petName: profile?.petName || '' }); setProfileOpen(true); }
   function withProfile(action: () => void) { if (profile) action(); else openProfile(action); }
-  async function run(action: () => Promise<void>) { if (busy) return; setBusy(true); setError(''); try { await action(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
-  function openComposer() { const current = profileRef.current; setError(''); setPostForm({ ...initialPost, category: category === 'all' ? 'info' : category as CommunityCategory, region: current?.region || region || '11', district: current ? current.district : district }); setComposer(true); }
-  function openPost(id: string) { setSelected(id); setDetail(null); setComment(''); setError(''); setDeleteConfirm(false); }
-  function openInbox() { setError(''); setInbox(true); }
-  async function saveProfile(event: FormEvent) {
-    event.preventDefault(); const pending = afterProfile.current; let saved = false;
-    await run(async () => { const p = await request<Profile>('/profile', 'POST', profileForm); profileRef.current = p; setProfile(p); setProfileOpen(false); setToast('이웃 프로필을 저장했어요.'); setRevision(n => n + 1); afterProfile.current = null; saved = true; });
-    if (saved) pending?.();
+  async function run(action: () => Promise<void>) {
+    if (lock.current) return false; lock.current = true; setBusy(true); setError('');
+    try { await action(); return true; } catch (e) { setError((e as Error).message); return false; }
+    finally { lock.current = false; setBusy(false); }
   }
-  async function publish(event: FormEvent) { event.preventDefault(); await run(async () => {
-    const body = { ...postForm, price: postForm.tradeType === 'share' ? 0 : Number(postForm.price), capacity: Number(postForm.capacity), meetingAt: postForm.meetingAt ? new Date(postForm.meetingAt).toISOString() : '' };
-    const result = await request<PostDetail>('/posts', 'POST', body); setComposer(false); setPage(1); setCategory('all'); setRegion(''); setDistrict(''); setKeyword(''); setDraft(''); setMine(false); setRevision(n => n + 1); openPost(result.item.post.id); setDetail(result); setToast('이웃들에게 이야기를 전했어요.');
-  }); }
-  function mutatePost(suffix: string, method: string, body?: unknown) { return run(async () => { const result = await request<PostDetail>(`/posts/${selected}${suffix}`, method, body); setDetail(result); setRevision(n => n + 1); }); }
-  function startChat() { withProfile(() => { void run(async () => { const data = await request<ConversationDetail>('/conversations', 'POST', { postId: selected }); setChatId(data.conversation.id); setChat(data); setSelected(''); setInbox(true); setMessage(''); }); }); }
-  const pages = Math.ceil((feed?.total || 0) / 12);
-  const p = detail?.item.post;
-  const profileOptions = regions.length ? regions : [{ code: '11', name: '서울' }];
-  const modalError = <ErrorMessage message={error}/>;
+  function startCreate() {
+    if (tripStops.length < 2) { onBrowse(); return; }
+    withProfile(() => { setEditing(''); setForm({ title: '', content: '', region: initialRegion }); setComposeStops([...tripStops]); setComposer(true); setError(''); });
+  }
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault(); const next = afterProfile.current;
+    const success = await run(async () => { const saved = await request<Profile>('/profile', 'POST', profileForm); setProfile(saved); setProfileOpen(false); afterProfile.current = null; setRevision(n => n + 1); });
+    if (success) next?.();
+  }
+  async function publish(event: FormEvent) {
+    event.preventDefault();
+    await run(async () => {
+      const body = courseInput(form.title, form.content, form.region, composeStops);
+      const result = await request<CourseView>(editing ? `/courses/${editing}` : '/courses', editing ? 'PUT' : 'POST', body);
+      setComposer(false); setDetail(result); setPage(1); setRegion(''); setKeyword(''); setDraft(''); setMine(false); setRevision(n => n + 1);
+      openCourse(result.course.id); setToast(editing ? '공유 코스를 수정했어요.' : '우리의 코스를 공유했어요.');
+    });
+  }
+  function editCourse(item: CourseView) {
+    setEditing(item.course.id); setForm({ title: item.course.title, content: item.course.content, region: item.course.region });
+    setComposeStops([...item.course.stops]); setSelected(''); window.location.hash = 'community'; setComposer(true); setError('');
+  }
+  async function likeCourse(item: CourseView) {
+    withProfile(() => { void run(async () => {
+      const result = await request<CourseView>(`/courses/${item.course.id}/like`, 'PUT', { enabled: !item.liked }); setDetail(result); setRevision(n => n + 1);
+    }); });
+  }
+  async function copyLink(id: string) {
+    try { await navigator.clipboard.writeText(courseShareUrl(id, window.location.href)); setToast('코스 링크를 복사했어요.'); }
+    catch { setError('링크를 복사하지 못했어요. 아래 공유 주소를 직접 복사해주세요.'); }
+  }
+  function importCourse() {
+    if (!detail) return;
+    try { courseInput('', '', detail.course.region, detail.course.stops); onImportCourse(detail.course.stops.map(p => ({ ...p }))); }
+    catch (e) { setError((e as Error).message); }
+  }
+  const course = detail?.course;
+  const pages = Math.ceil((feed?.total || 0) / (feed?.pageSize || 12));
+  const shareUrl = course ? courseShareUrl(course.id, window.location.href) : '';
 
-  return <main className="community-page">
-    <section className="community-hero"><div className="container community-hero-inner"><div><div className="eyebrow"><span/> OUR NEIGHBORHOOD</div><h1>같은 동네, 같은 마음.<br/><span>우리 사이가 가까워지는 곳.</span></h1><p>작은 정보도, 함께 걷는 시간도, 쓰임을 기다리는 물건도.<br/>반려생활의 좋은 것들을 이웃과 나눠보세요.</p><button className="primary-button" disabled={!profileReady} onClick={() => withProfile(openComposer)}><Plus size={17}/> 우리 동네 이야기 쓰기</button></div><div className="community-hero-art" aria-hidden="true"><span className="community-art-ring"/><span className="community-art-paw"><PawPrint size={75}/></span><span className="community-art-note"><Users size={19}/> 산책 친구가 생겼어요</span><span className="community-art-gift"><ShoppingBag size={20}/> 필요한 물건을 나눠요</span><span className="community-art-heart"><Heart size={22} fill="currentColor"/></span></div></div></section>
-    <section className="container community-content">
-      <PointsPanel onEditProfile={() => openProfile()}/>
-      <div className="community-topline"><div><span className="eyebrow">LITTLE TALKS, BIG CONNECTIONS</span><h2>우리 동네 커뮤니티 <Sprout size={24}/></h2><p>함께 키우는 반려생활, 여기서 시작해요.</p></div><div className="community-account-actions"><button className="community-outline" disabled={!profileReady} onClick={() => withProfile(openInbox)}><MessageCircle size={16}/> 내 대화</button><button className="community-profile-button" disabled={!profileReady} onClick={() => openProfile()}><Avatar name={profile?.nickname || '이'}/><span>{profile?.nickname || '이웃 프로필 만들기'}<small>{profile ? location(profile) : '닉네임으로 가볍게 시작해요'}</small></span></button></div></div>
-      <div className="community-layout"><aside className="community-sidebar"><div className="community-side-title">이야기 모아보기</div><div className="community-tabs" role="group" aria-label="커뮤니티 종류">{Object.entries(categories).map(([key, label]) => { const Icon = key === 'all' ? PawPrint : icons[key as CommunityCategory]; return <button key={key} className={category === key ? 'active' : ''} aria-pressed={category === key} onClick={() => { setCategory(key); setPage(1); }}><Icon size={17}/>{label}<ChevronRight size={13}/></button>; })}</div><div className="community-side-divider"/><label htmlFor="community-region">어느 동네 이야기인가요?</label><select id="community-region" value={region} onChange={e => { setRegion(e.target.value); setDistrict(''); setPage(1); }}><option value="">전국 모든 이웃</option>{profileOptions.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select><select aria-label="커뮤니티 시군구" disabled={!region} value={district} onChange={e => { setDistrict(e.target.value); setPage(1); }}><option value="">시·군·구 전체</option>{districts.map(d => <option key={d.code} value={d.name}>{d.name}</option>)}</select>{profile && <button className="community-my-area" onClick={() => { setRegion(profile.region); setDistrict(profile.district); setPage(1); }}><MapPin size={13}/> 내 동네로 보기</button>}<div className="community-neighbor-note"><Heart size={23}/><h3>다정한 이웃이 되어주세요.</h3><p>서로의 경험을 존중하고,<br/>만남은 밝은 공공장소에서.<br/>따뜻한 인사로 시작해요.</p></div></aside>
-      <div className="community-feed"><form className="community-search" onSubmit={e => { e.preventDefault(); setKeyword(draft.trim()); setPage(1); }}><Search size={19}/><input aria-label="커뮤니티 검색" placeholder="궁금한 정보, 산책 친구, 필요한 물건 찾기" maxLength={60} value={draft} onChange={e => setDraft(e.target.value)}/>{draft && <button type="button" aria-label="커뮤니티 검색어 지우기" onClick={() => { setDraft(''); setKeyword(''); setPage(1); }}><X size={16}/></button>}<button className="community-search-submit">검색</button></form>
-        <div className="community-feed-toolbar"><div><button className={!mine ? 'active' : ''} onClick={() => { setMine(false); setPage(1); }}>이웃 이야기</button><button className={mine ? 'active' : ''} disabled={!profileReady} onClick={() => withProfile(() => { setMine(true); setPage(1); })}>내가 쓴 글</button><span>{loading ? '…' : feedError ? '—' : (feed?.total || 0).toLocaleString()}개의 이야기</span></div><select aria-label="커뮤니티 글 정렬" value={sort} onChange={e => { setSort(e.target.value); setPage(1); }}><option value="recent">최신순</option><option value="popular">공감 많은 순</option></select></div>
-        {keyword && <div className="active-keyword">“{keyword}” 검색 결과 <button aria-label="커뮤니티 검색 해제" onClick={() => { setKeyword(''); setDraft(''); setPage(1); }}><X size={13}/></button></div>}
-        {loading ? <div className="community-loading" role="status"><LoaderCircle className="spin" size={23}/>이웃들의 이야기를 불러오고 있어요.</div> : feedError ? <div className="empty-state" role="alert"><Info size={32}/><h3>이야기를 불러오지 못했어요</h3><p>{feedError}</p><button onClick={() => setRevision(n => n + 1)}>다시 시도</button></div> : !feed?.items.length ? <div className="community-empty"><span><Sprout size={38}/></span><h3>{keyword ? '아직 이 이야기는 없네요' : mine ? '첫 이야기를 기다리고 있어요' : '첫 번째 이웃이 되어주세요'}</h3><p>{keyword ? '검색어나 동네를 바꿔 다시 찾아보세요.' : '좋았던 산책길, 궁금한 반려생활, 나누고 싶은 물건까지.\n작은 이야기 하나가 좋은 인연의 시작이 돼요.'}</p><button className="primary-button" disabled={!profileReady} onClick={() => withProfile(openComposer)}>첫 이야기 쓰기 <ArrowRight size={15}/></button></div> : <div className="community-post-list">{feed.items.map(item => <PostCard key={item.post.id} item={item} location={location(item.post)} open={() => openPost(item.post.id)}/>)}</div>}
-        {!loading && !feedError && pages > 1 && <nav className="pagination" aria-label="커뮤니티 페이지"><button aria-label="커뮤니티 이전 페이지" disabled={page === 1} onClick={() => setPage(n => n - 1)}><ChevronLeft size={16}/></button><span><b>{page}</b> / {pages}</span><button aria-label="커뮤니티 다음 페이지" disabled={page >= pages} onClick={() => setPage(n => n + 1)}><ChevronRight size={16}/></button></nav>}
-        <div className="community-feed-note"><PawPrint size={14}/> 이웃이 직접 나누는 이야기예요. 거래 전 물건과 조건을 함께 확인해주세요.</div>
-      </div></div>
+  return <main className="course-community">
+    <section className="course-hero"><div className="container course-hero-inner"><div><div className="eyebrow"><span/> OUR ROUTES TOGETHER</div><h1>좋았던 길은,<br/><span>함께 나누고 싶으니까.</span></h1><p>우리 아이와 찾은 카페, 산책길, 하룻밤의 쉼.<br/>내가 만든 코스를 공유하고, 새로운 여행을 만나보세요.</p><button className="primary-button" disabled={!profileReady} onClick={startCreate}><Share2 size={17}/>{tripStops.length >= 2 ? '내 코스 공유하기' : '나만의 코스 만들기'}</button></div><div className="course-hero-art" aria-hidden="true"><div className="course-art-line"/><span><MapPin size={25}/><small>느긋한 산책</small></span><span><PawPrint size={35}/><small>우리만의 여행</small></span><span><Heart size={24}/><small>함께 나누는 코스</small></span></div></div></section>
+    <section className="container course-community-content">
+      <PointsPanel onEditProfile={() => { setProfileForm({ nickname: profile?.nickname || '', petName: profile?.petName || '' }); setError(''); setProfileOpen(true); }}/>
+      <div className="course-section-heading"><div><div className="eyebrow">A GOOD ROUTE IS WORTH SHARING</div><h2>함께 떠나는 코스 <Route size={24}/></h2><p>다른 여행자의 코스를 담아 나만의 순서로 이어가세요.</p></div><button className="course-profile" disabled={!profileReady} onClick={() => openProfile()}><span>{(profile?.nickname || '나').slice(0, 1)}</span><div>{profile?.nickname || '여행자 프로필 만들기'}<small>{profile?.petName ? `${profile.petName}와 함께하는 여행` : '닉네임으로 가볍게 시작해요'}</small></div></button></div>
+      {!profileOpen && !composer && !selected && <ErrorMessage message={error}/>}
+      <div className="course-current-plan"><Route size={22}/><div><strong>나의 여행 코스 <b>{tripStops.length}곳</b></strong><p>{tripStops.length ? tripStops.map(p => p.name).join(' → ') : '장소 둘러보기에서 방문할 곳을 순서대로 담아주세요.'}</p></div><button onClick={tripStops.length >= 2 ? startCreate : onBrowse} disabled={!profileReady}>{tripStops.length >= 2 ? <><Share2 size={15}/> 이 코스 공유하기</> : <><Plus size={15}/> 장소 고르기</>}</button></div>
+      <form className="course-search" onSubmit={e => { e.preventDefault(); setKeyword(draft.trim()); setPage(1); }}><Search size={19}/><input aria-label="공유 코스 검색" placeholder="코스 이름, 장소, 여행 이야기를 찾아보세요" maxLength={60} value={draft} onChange={e => setDraft(e.target.value)}/>{draft && <button type="button" aria-label="코스 검색어 지우기" onClick={() => { setDraft(''); setKeyword(''); setPage(1); }}><X size={16}/></button>}<button className="course-search-submit">검색</button></form>
+      <div className="course-toolbar"><div className="course-tabs"><button className={!mine ? 'active' : ''} onClick={() => { setMine(false); setPage(1); }}>모두의 코스</button><button className={mine ? 'active' : ''} disabled={!profileReady} onClick={() => withProfile(() => { setMine(true); setPage(1); })}>내가 공유한 코스</button><span>{loading ? '…' : feedError ? '—' : (feed?.total || 0).toLocaleString()}개의 여행</span></div><div className="course-filters"><select aria-label="공유 코스 지역" value={region} onChange={e => { setRegion(e.target.value); setPage(1); }}><option value="">전국 모든 지역</option>{options.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select><select aria-label="공유 코스 정렬" value={sort} onChange={e => { setSort(e.target.value); setPage(1); }}><option value="recent">최신순</option><option value="popular">좋아요 많은 순</option></select></div></div>
+      {keyword && <p className="course-search-caption">“{keyword}” 검색 결과 <button aria-label="코스 검색 해제" onClick={() => { setKeyword(''); setDraft(''); setPage(1); }}><X size={13}/></button></p>}
+      {loading ? <div className="course-loading" role="status"><LoaderCircle className="spin" size={22}/> 여행자들의 코스를 불러오고 있어요</div> : feedError ? <div className="course-empty" role="alert"><Info size={32}/><h3>코스를 불러오지 못했어요</h3><p>{feedError}</p><button className="primary-button" onClick={() => setRevision(n => n + 1)}>다시 시도</button></div> : !feed?.items.length ? <div className="course-empty"><Route size={38}/><h3>{keyword || region ? '이 조건의 코스를 아직 찾지 못했어요' : mine ? '나만의 첫 코스를 공유해보세요' : '첫 번째 여행 코스를 기다리고 있어요'}</h3><p>{keyword || region ? '다른 지역이나 검색어로 찾아보세요.' : '좋아하는 장소를 두 곳 이상 담고, 여행 이야기를 들려주세요.'}</p><button className="primary-button" disabled={!profileReady} onClick={startCreate}>나의 코스 만들고 공유하기 <ArrowRight size={16}/></button></div> : <div className="shared-course-grid">{feed.items.map(item => {
+        const cover = item.course.stops.find(p => p.image);
+        return <article className="shared-course-card" key={item.course.id}><button className="shared-course-open" onClick={() => openCourse(item.course.id)} aria-label={`${item.course.title} 코스 자세히 보기`}><div className="shared-course-cover"><img loading="lazy" src={safeImage(cover?.image || '')} alt={cover ? `${cover.name} 사진` : '여행 코스'} onError={e => { if (e.currentTarget.getAttribute('src') !== '/images/placeholder.svg') e.currentTarget.src = '/images/placeholder.svg'; }}/><span><Route size={13}/>{item.course.stops.length}곳을 잇는 여행</span><b>{regionName(item.course.region)}</b></div><div className="shared-course-body"><h3>{item.course.title}</h3><p className="shared-course-intro">{item.course.content}</p><ol className="shared-course-mini-stops">{item.course.stops.slice(0, 3).map((p, i) => <li key={p.id}><span>{i+1}</span>{p.name}</li>)}{item.course.stops.length > 3 && <li className="course-more-stops">+{item.course.stops.length-3}곳 더</li>}</ol><div className="shared-course-footer"><span>{item.author.nickname} · {communityDate(item.course.createdAt)}</span><span><Heart size={13} fill={item.liked ? 'currentColor' : 'none'}/>{item.likeCount}</span></div></div></button>{cover && photoCredit(cover) && <p className="course-photo-credit">{photoPage(cover) ? <a href={photoPage(cover)} target="_blank" rel="noreferrer">{photoCredit(cover)} ↗</a> : photoCredit(cover)}</p>}</article>;
+      })}</div>}
+      {!loading && !feedError && pages > 1 && <nav className="pagination" aria-label="공유 코스 페이지"><button aria-label="이전 코스 페이지" disabled={page === 1} onClick={() => setPage(n => n - 1)}><ChevronLeft size={16}/></button><span><b>{page}</b> / {pages}</span><button aria-label="다음 코스 페이지" disabled={page >= pages} onClick={() => setPage(n => n + 1)}><ChevronRight size={16}/></button></nav>}
+      <p className="course-community-note"><PawPrint size={14}/> 같은 서버에 접속한 여행자들과 코스를 나눠요. 방문 전 각 장소의 동반 조건을 확인해주세요.</p>
     </section>
     {toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
-    {profileOpen && <Modal title={profile ? '내 이웃 프로필' : '반가워요, 새로운 이웃!'} close={() => { if (!busy) { setProfileOpen(false); afterProfile.current = null; setError(''); } }}><form className="community-form" onSubmit={saveProfile}><p className="community-form-intro">이웃에게 보여줄 이름과 활동할 동네를 알려주세요.</p>{modalError}<label>닉네임 <input required minLength={2} maxLength={16} placeholder="예: 보리네" autoComplete="nickname" value={profileForm.nickname} onChange={e => setProfileForm({ ...profileForm, nickname: e.target.value })}/></label><label>반려동물 이름 <span className="community-optional">선택</span><input maxLength={20} placeholder="함께하는 아이의 이름" value={profileForm.petName} onChange={e => setProfileForm({ ...profileForm, petName: e.target.value })}/></label><div className="community-form-row"><label>지역<select value={profileForm.region} onChange={e => setProfileForm({ ...profileForm, region: e.target.value, district: '' })}>{profileOptions.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select></label><label>동네<select value={profileForm.district} onChange={e => setProfileForm({ ...profileForm, district: e.target.value })}><option value="">시·군·구 전체</option>{profileDistricts.map(d => <option key={d.code} value={d.name}>{d.name}</option>)}</select></label></div><p className="community-session-note"><Info size={15}/> 이 브라우저에 연결되는 간편 프로필이에요. 쿠키를 지우거나 다른 기기를 쓰면 기존 프로필에 접속할 수 없어요. 동네는 직접 선택하며 위치 인증은 제공하지 않아요.</p><button className="primary-button" disabled={busy}>{busy ? '저장 중…' : '이웃 프로필 저장'}<PawPrint size={16}/></button></form></Modal>}
-    {composer && <Modal title="이웃에게 이야기 전하기" close={() => { if (!busy && !photoBusy) { setComposer(false); setError(''); } }}><form className="community-form" onSubmit={publish}>{modalError}<div className="community-compose-types">{(['info', 'walk', 'market'] as CommunityCategory[]).map(type => <button key={type} type="button" aria-pressed={postForm.category === type} className={postForm.category === type ? 'active' : ''} onClick={() => setPostForm({ ...postForm, category: type })}>{categories[type]}</button>)}</div><label>제목<input required minLength={2} maxLength={80} value={postForm.title} placeholder={postForm.category === 'market' ? '어떤 물건을 나누고 싶나요?' : postForm.category === 'walk' ? '어떤 이웃과 함께하고 싶나요?' : '이웃과 나누고 싶은 이야기는?'} onChange={e => setPostForm({ ...postForm, title: e.target.value })}/></label><div className="community-form-row"><label>지역<select value={postForm.region} onChange={e => setPostForm({ ...postForm, region: e.target.value, district: '' })}>{profileOptions.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select></label><label>동네<select value={postForm.district} onChange={e => setPostForm({ ...postForm, district: e.target.value })}><option value="">시·군·구 전체</option>{postDistricts.map(d => <option key={d.code} value={d.name}>{d.name}</option>)}</select></label></div>
-      {postForm.category === 'market' && <div className="community-form-row"><label>거래 방식<select value={postForm.tradeType} onChange={e => setPostForm({ ...postForm, tradeType: e.target.value })}><option value="sale">중고 판매</option><option value="share">무료 나눔</option></select></label>{postForm.tradeType === 'sale' && <label>가격 (원)<input type="number" min={0} max={100000000} step={1} required value={postForm.price} placeholder="가격을 입력해주세요" onChange={e => setPostForm({ ...postForm, price: e.target.value })}/></label>}</div>}
-      {postForm.category === 'walk' && <><div className="community-form-row"><label>만날 날짜·시간<input type="datetime-local" required value={postForm.meetingAt} onChange={e => setPostForm({ ...postForm, meetingAt: e.target.value })}/></label><label>정원 (주최자 포함)<input type="number" min={2} max={30} required value={postForm.capacity} onChange={e => setPostForm({ ...postForm, capacity: e.target.value })}/></label></div><label>만날 장소<input required minLength={2} maxLength={80} placeholder="예: 서울숲 3번 출입구 앞" value={postForm.meetingPlace} onChange={e => setPostForm({ ...postForm, meetingPlace: e.target.value })}/></label></>}
-      <label>내용<textarea required minLength={5} maxLength={5000} rows={6} value={postForm.content} placeholder={postForm.category === 'market' ? '물건의 상태, 사용 기간, 거래할 장소를 자세히 적어주세요. 반려동물 생체 거래는 허용하지 않아요.' : '이웃이 알면 좋은 내용을 자유롭게 적어주세요. 공개 글에 연락처나 상세 주소를 남기지 마세요.'} onChange={e => setPostForm({ ...postForm, content: e.target.value })}/><small className="community-text-count">{postForm.content.length} / 5,000</small></label><div className="community-photo-field"><label className="community-photo-add"><ImagePlus size={21}/><span>{photoBusy ? '사진 준비 중…' : '사진 1장 첨부'}<small>JPG·PNG·WebP, 최대 10MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp" disabled={photoBusy || busy} onChange={async e => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; setPhotoBusy(true); setError(''); try { const image = await preparePhoto(file); setPostForm(current => ({ ...current, image })); } catch (ex) { setError((ex as Error).message); } finally { setPhotoBusy(false); } }}/></label>{postForm.image && <div className="community-photo-preview"><img src={postForm.image} alt="첨부할 사진"/><button type="button" aria-label="첨부 사진 삭제" onClick={() => setPostForm({ ...postForm, image: '' })}><X size={15}/></button></div>}</div><button className="primary-button" disabled={busy || photoBusy}>{busy ? '이야기 전하는 중…' : '이야기 등록하기'}<Send size={16}/></button></form></Modal>}
-    {selected && <Modal title="우리 동네 이야기" close={() => { if (!busy) { setSelected(''); setError(''); } }}>{modalError}{!detail ? <div className="community-loading"><LoaderCircle className="spin"/>이야기를 불러오고 있어요.</div> : p && <div className="community-post-detail"><div className="community-detail-tags"><Badge category={p.category}/>{p.category !== 'info' && <span className={`community-status ${p.status}`}>{postStatus(p)}</span>}</div><h2>{p.title}</h2><div className="community-author"><Avatar name={detail.item.author.nickname}/><div><strong>{detail.item.author.nickname}{detail.item.author.petName && <small> · {detail.item.author.petName} 보호자</small>}</strong><span>{location(p)} · {date(p.createdAt)}</span></div></div>{p.image && <img className="community-detail-photo" src={p.image} alt={`${p.title} 첨부 사진`}/>}{p.category === 'market' && <div className="community-detail-price">{postPrice(p)}</div>}{p.category === 'walk' && <div className="community-meeting"><span><Clock3 size={16}/>{date(p.meetingAt)}</span><span><MapPin size={16}/>{p.meetingPlace}</span><span><Users size={16}/>{detail.item.participantCount} / {p.capacity}명 참여</span></div>}<p className="community-post-body">{p.content}</p><div className="community-detail-actions"><button className={`community-outline ${detail.item.liked ? 'liked' : ''}`} disabled={busy} aria-pressed={detail.item.liked} onClick={() => withProfile(() => { void mutatePost('/like', 'PUT', { enabled: !detail.item.liked }); })}><Heart size={16} fill={detail.item.liked ? 'currentColor' : 'none'}/> 공감 {detail.item.likeCount}</button>{!detail.item.mine && <button className="community-outline" disabled={busy} onClick={startChat}><MessageCircle size={16}/> 1:1 대화</button>}{p.category === 'walk' && !detail.item.mine && <button className="primary-button" disabled={busy || (!detail.item.joined && (postStatus(p) === '모집 마감' || detail.item.participantCount >= p.capacity))} onClick={() => withProfile(() => { void mutatePost('/join', 'PUT', { enabled: !detail.item.joined }); })}>{detail.item.joined ? '참여 취소' : detail.item.participantCount >= p.capacity ? '정원 마감' : '함께 산책하기'}</button>}</div>
-      {detail.item.mine && <div className="community-owner-actions">{p.category !== 'info' && <label>글 상태<select aria-label="글 상태 변경" disabled={busy} value={p.status} onChange={e => { void mutatePost('/status', 'PUT', { status: e.target.value }); }}><option value="open">{p.category === 'market' ? '거래 가능' : '모집 중'}</option>{p.category === 'market' && <option value="reserved">예약 중</option>}<option value="done">{p.category === 'market' ? '거래 완료' : '모집 마감'}</option></select></label>}{deleteConfirm ? <div className="community-delete-confirm"><span>이 글과 댓글을 삭제할까요?</span><button disabled={busy} onClick={() => { void run(async () => { await request(`/posts/${selected}`, 'DELETE'); setSelected(''); setRevision(n => n + 1); setPage(1); setToast('이야기를 삭제했어요.'); }); }}>삭제</button><button onClick={() => setDeleteConfirm(false)}>취소</button></div> : <button className="community-delete" onClick={() => setDeleteConfirm(true)}><Trash2 size={14}/> 글 삭제</button>}</div>}
-      <section className="community-comments"><h3>이웃의 한마디 <span>{detail.comments.length}</span></h3>{detail.comments.length ? detail.comments.map(c => <div className="community-comment" key={c.comment.id}><Avatar name={c.author.nickname}/><div><strong>{c.author.nickname}</strong><p>{c.comment.content}</p><small>{date(c.comment.createdAt)}</small></div>{c.mine && <button disabled={busy} aria-label="내 댓글 삭제" onClick={() => { void mutatePost(`/comments/${c.comment.id}`, 'DELETE'); }}><Trash2 size={14}/></button>}</div>) : <p className="community-no-comments">따뜻한 첫마디를 남겨보세요.</p>}<form className="community-comment-form" onSubmit={e => { e.preventDefault(); withProfile(() => { void run(async () => { const data = await request<PostDetail>(`/posts/${selected}/comments`, 'POST', { content: comment }); setDetail(data); setComment(''); setRevision(n => n + 1); }); }); }}><textarea aria-label="댓글 내용" required maxLength={1000} rows={2} value={comment} placeholder="이웃에게 한마디 남겨보세요" onChange={e => setComment(e.target.value)}/><button className="primary-button" disabled={busy || !comment.trim()}>댓글 등록<Send size={14}/></button></form></section></div>}</Modal>}
-    {inbox && <Modal title="이웃과 나누는 대화" wide close={() => { if (!busy) { setInbox(false); setError(''); } }}>{modalError}<div className={`community-inbox ${chatId ? 'chat-selected' : ''}`}><aside className="community-conversations"><h3>내 대화 <span>{conversations.length}</span></h3>{inboxLoading && !conversations.length ? <p className="community-chat-help">대화를 불러오는 중이에요.</p> : !conversations.length ? <p className="community-chat-help">아직 나눈 대화가 없어요.<br/>이웃의 글에서 1:1 대화를 시작해보세요.</p> : conversations.map(c => <button key={c.id} className={chatId === c.id ? 'active' : ''} onClick={() => { setChatId(c.id); setChat(null); setMessage(''); setError(''); }}><Avatar name={c.neighbor.nickname}/><span><strong>{c.neighbor.nickname}</strong><small>{c.title}</small><p>{c.lastMessage}</p></span></button>)}</aside><section className="community-chat">{chatId ? <><div className="community-chat-heading"><button aria-label="대화 목록으로" className="community-chat-back" onClick={() => { setChatId(''); setChat(null); }}><ChevronLeft size={20}/></button><div><strong>{chat?.conversation.neighbor.nickname || '이웃과의 대화'}</strong><p>{chat?.conversation.title || '대화를 불러오는 중이에요.'}</p></div></div><div className="community-messages" aria-live="polite">{chat?.messages.length ? chat.messages.map(m => <div className={`community-message ${m.mine ? 'mine' : ''}`} key={m.message.id}><p>{m.message.content}</p><time>{date(m.message.createdAt)}</time></div>) : <p className="community-chat-help">가벼운 인사로 대화를 시작해보세요.<br/>연락처나 계좌번호는 신중하게 공유해주세요.</p>}<div ref={messageEnd}/></div><form className="community-send" onSubmit={e => { e.preventDefault(); void run(async () => { const data = await request<ConversationDetail>(`/conversations/${chatId}/messages`, 'POST', { content: message }); setChat(data); setMessage(''); setRevision(n => n + 1); }); }}><textarea aria-label="대화 메시지" rows={2} maxLength={1000} required value={message} placeholder="메시지를 입력해주세요" onChange={e => setMessage(e.target.value)}/><button className="primary-button" aria-label="메시지 보내기" disabled={busy || !message.trim()}><Send size={18}/></button></form></> : <div className="community-chat-placeholder"><MessageCircle size={36}/><h3>이야기를 나눠보세요</h3><p>함께 걸을 약속도, 물건에 대한 궁금증도.<br/>대화를 선택하면 여기에서 이어갈 수 있어요.</p></div>}</section></div></Modal>}
+    {profileOpen && <Modal title="여행자 프로필" close={() => { if (!busy) { setProfileOpen(false); afterProfile.current = null; setError(''); } }}><form className="course-form" onSubmit={saveProfile}><p>코스에 표시할 여행자 이름을 알려주세요.</p><ErrorMessage message={error}/><label>닉네임<input required minLength={2} maxLength={16} autoComplete="nickname" placeholder="예: 보리와 산책" value={profileForm.nickname} onChange={e => setProfileForm({ ...profileForm, nickname: e.target.value })}/></label><label>반려동물 이름 <small>선택</small><input maxLength={20} value={profileForm.petName} onChange={e => setProfileForm({ ...profileForm, petName: e.target.value })}/></label><p className="course-session-note">이 브라우저에 연결된 간편 프로필이에요. 쿠키를 삭제하면 기존 프로필을 복구할 수 없어요.</p><button className="primary-button" disabled={busy}>{busy ? <LoaderCircle className="spin" size={16}/> : <Check size={16}/>} 프로필 저장</button></form></Modal>}
+    {composer && <Modal title={editing ? '공유 코스 수정' : '우리의 코스 공유하기'} close={() => { if (!busy) { setComposer(false); setError(''); } }} wide><form className="course-form" onSubmit={publish}><p>방문할 장소와 순서를 확인하고, 이 코스가 좋은 이유를 들려주세요.</p><ErrorMessage message={error}/><div className="course-compose-fields"><label>코스 이름<input required minLength={2} maxLength={80} placeholder="예: 보리와 보내는 느긋한 서울숲 하루" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}/></label><label>대표 지역<select value={form.region} onChange={e => setForm({ ...form, region: e.target.value })}>{options.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}</select></label></div><label>코스 소개<textarea required minLength={5} maxLength={5000} rows={4} placeholder="추천하는 방문 시간, 쉬어가기 좋은 곳, 반려동물과 함께할 때의 팁을 알려주세요." value={form.content} onChange={e => setForm({ ...form, content: e.target.value })}/></label><div className="course-compose-stops"><h3>방문 순서 <span>{composeStops.length}/{MAX_STOPS}곳</span></h3><CourseStops stops={composeStops} onChange={setComposeStops}/></div><p className="course-session-note">선택한 장소와 순서가 공개돼요. 현재 위치는 공유하지 않습니다.</p><button className="primary-button" disabled={busy || composeStops.length < 2}>{busy ? <LoaderCircle className="spin" size={17}/> : <Share2 size={17}/>} {editing ? '수정한 코스 저장' : '코스 공유하기'}</button></form></Modal>}
+    {selected && !profileOpen && <Modal title="함께 떠나는 코스" close={closeCourse} wide><ErrorMessage message={error}/>{!course ? <div className="course-loading">{detailLoading && <><LoaderCircle className="spin" size={22}/> 코스를 불러오고 있어요</>}{!detailLoading && <button onClick={() => setRevision(n => n + 1)}>다시 시도</button>}</div> : <div className="course-detail"><div className="course-detail-label"><span>{regionName(course.region)}</span><span><Route size={14}/>{course.stops.length}곳의 여행</span></div><h2>{course.title}</h2><p className="course-detail-author">{detail.author.nickname}{detail.author.petName && ` · ${detail.author.petName}와 함께`}<time>{communityDate(course.createdAt)}</time></p><p className="course-description">{course.content}</p><CoursePreview stops={course.stops}/><div className="course-detail-stops"><h3>이 순서로 함께 가요</h3><CourseStops stops={course.stops}/></div><div className="course-detail-actions"><button className="primary-button" disabled={busy} onClick={() => tripStops.length ? setReplaceConfirm(true) : importCourse()}><Plus size={17}/> 내 코스로 가져오기</button><button className={`course-outline ${detail.liked ? 'liked' : ''}`} disabled={busy || !profileReady} onClick={() => void likeCourse(detail)}><Heart size={16} fill={detail.liked ? 'currentColor' : 'none'}/> 좋아요 {detail.likeCount}</button><button className="course-outline" onClick={() => void copyLink(course.id)}><Copy size={16}/> 링크 복사</button></div>{replaceConfirm && <div className="course-confirm" role="group" aria-label="나의 코스 교체 확인"><p>현재 담은 {tripStops.length}곳을 이 코스로 바꿀까요?</p><button className="primary-button" onClick={importCourse}>이 코스로 바꾸기</button><button onClick={() => setReplaceConfirm(false)}>취소</button></div>}<label className="course-share-address">공유 링크<input readOnly value={shareUrl} onFocus={e => e.currentTarget.select()} aria-label="코스 공유 링크"/></label>{detail.mine && <div className="course-owner-actions"><button disabled={busy} onClick={() => editCourse(detail)}><Pencil size={14}/> 코스 수정</button>{!deleteConfirm ? <button disabled={busy} onClick={() => setDeleteConfirm(true)}><Trash2 size={14}/> 공유 삭제</button> : <div className="course-confirm"><span>공유한 코스를 삭제할까요?</span><button disabled={busy} onClick={() => void run(async () => { await request(`/courses/${course.id}`, 'DELETE'); setSelected(''); window.location.hash = 'community'; setRevision(n => n + 1); setToast('코스 공유를 삭제했어요.'); })}>삭제하기</button><button disabled={busy} onClick={() => setDeleteConfirm(false)}>취소</button></div>}</div>}</div>}</Modal>}
   </main>;
-}
-
-function PostCard({ item, location, open }: { item: PostView; location: string; open: () => void }) {
-  const p = item.post; const Icon = icons[p.category];
-  return <article className={`community-post-card ${p.category}`}><button className="community-post-open" onClick={open}><div className="community-card-main"><div className="community-card-tags"><Badge category={p.category}/>{p.category !== 'info' && <span className={`community-status ${p.status}`}>{postStatus(p)}</span>}</div><h3>{p.title}</h3><p className="community-excerpt">{p.content}</p>{p.category === 'market' && <strong className="community-card-price">{postPrice(p)}</strong>}{p.category === 'walk' && <div className="community-card-meeting"><Clock3 size={13}/>{date(p.meetingAt)}<span>· {item.participantCount}/{p.capacity}명</span></div>}<div className="community-card-meta"><span>{item.author.nickname} · {location}</span><time>{date(p.createdAt)}</time></div></div>{p.image ? <img className="community-card-thumbnail" src={p.image} alt={`${p.title} 첨부 사진`} loading="lazy"/> : <div className={`community-card-symbol ${p.category}`} aria-hidden="true"><Icon size={31}/></div>}</button><div className="community-card-footer"><span><MapPin size={12}/>{location}</span><div><span><Heart size={13} fill={item.liked ? 'currentColor' : 'none'}/>{item.likeCount}</span><span><MessageCircle size={13}/>{item.commentCount}</span></div></div></article>;
 }

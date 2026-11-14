@@ -24,7 +24,7 @@ kakao:
 auth:
   members-file: ${AUTH_MEMBERS_FILE:./data/members.json}
 community:
-  store: ${COMMUNITY_STORE:./data/community.json}
+  store: ${COMMUNITY_STORE:./data/course-community.json}
 logging:
   level:
     org.springframework.web.client: WARN
