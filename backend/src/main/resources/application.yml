@@ -1,0 +1,24 @@
+server:
+  port: ${PORT:8080}
+spring:
+  config:
+    import: "optional:file:./.env[.properties],optional:file:./backend/.env[.properties]"
+  application:
+    name: pet-tour
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=30m
+tour:
+  api-key: ${TOUR_API_KEY:}
+  base-url: https://apis.data.go.kr/B551011/KorPetTourService2
+kakao:
+  photos:
+    enabled: ${KAKAO_PHOTOS_ENABLED:true}
+    cache-file: ${KAKAO_PHOTOS_CACHE_FILE:./data/kakao-photos.json}
+    min-interval-ms: ${KAKAO_PHOTOS_MIN_INTERVAL_MS:1100}
+community:
+  store: ${COMMUNITY_STORE:./data/community.json}
+logging:
+  level:
+    org.springframework.web.client: WARN

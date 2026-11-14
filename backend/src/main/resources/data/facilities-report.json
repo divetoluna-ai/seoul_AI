@@ -1,0 +1,61 @@
+{
+  "source": "한국문화정보원_전국 반려동물 동반 가능 문화시설 위치 데이터_20250324.csv",
+  "sourceSha256": "2f88bedff41a8b9f032abd16ce2fb0bc31d91ec28ee559e6e79c2559a2f45928",
+  "sourceRows": 73558,
+  "csvSourceRows": 70650,
+  "csvIncluded": 8191,
+  "registrySources": [
+    {
+      "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
+      "sourceSha256": "d7022b10836cbba810caa900cfd562a8f8124d263c2512d6e24bf2a7dbe16f95",
+      "sourceRows": 2908,
+      "snapshot": "2026-11-14",
+      "added": 2856,
+      "merged_existing": 33,
+      "duplicates": 19
+    }
+  ],
+  "excluded": {
+    "medical": 58824,
+    "not_pet_friendly": 2799,
+    "duplicates": 836,
+    "registry_merged_existing": 33,
+    "registry_duplicates": 19
+  },
+  "included": 11047,
+  "byCategory": {
+    "attraction": 872,
+    "care": 2058,
+    "culture": 224,
+    "restaurant": 3671,
+    "shopping": 3814,
+    "stay": 408
+  },
+  "byRegion": {
+    "11": 1800,
+    "26": 622,
+    "27": 434,
+    "28": 697,
+    "29": 248,
+    "30": 331,
+    "31": 182,
+    "36": 51,
+    "41": 3148,
+    "43": 318,
+    "44": 457,
+    "46": 341,
+    "47": 416,
+    "48": 720,
+    "50": 354,
+    "51": 560,
+    "52": 368
+  },
+  "rules": [
+    "Exclude medical categories and facility names containing hospital/pharmacy",
+    "Include only explicitly pet-friendly Y records",
+    "Normalize whitespace, null markers, province codes and coordinates",
+    "Deduplicate normalized name and address; prefer the newest complete record",
+    "Include user-supplied registry workbooks; merge an unambiguous name and street match",
+    "Keep missing registry coordinates empty; resolve addresses on explicit course selection"
+  ]
+}

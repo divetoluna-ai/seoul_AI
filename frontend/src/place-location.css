@@ -1,0 +1,16 @@
+.detail-location{margin:23px 0 26px}
+.detail-location-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.detail-location-heading h3{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.detail-location-heading>span{font-size:9px;color:#839576;background:#f0f3e9;border-radius:4px;padding:4px 7px}
+.detail-location .trip-map-wrap{min-height:270px;height:270px;overflow:hidden;border:1px solid #dfe5d7;border-radius:9px}
+.detail-location .trip-map-provider{font-size:9px;padding:6px 8px}
+.detail-location-placeholder{min-height:210px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:24px;background:#f4f5ee;border:1px solid #e1e6d8;border-radius:9px;color:#829675;text-align:center}
+.detail-location-placeholder p{font-size:11px;line-height:1.8;max-width:320px}
+.detail-location-placeholder button{display:flex;align-items:center;gap:6px;background:#fffefa;border:1px solid #d8e1cc;border-radius:5px;padding:9px 12px;font-size:11px}
+.detail-location-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
+.detail-location-actions>a,.detail-location-actions>button{display:flex;align-items:center;justify-content:center;gap:7px;padding:12px 8px;border:1px solid #dce4d1;border-radius:7px;color:#526f43;background:#f5f7ee;font-size:11px;font-weight:500}
+.detail-location-actions .detail-directions{background:#2e5943;color:white;border-color:#2e5943}
+.detail-location-actions>a:hover{filter:brightness(.97)}
+.detail-location-actions>button:disabled{opacity:.45}
+.detail-location-note{font-size:9px;line-height:1.8;color:#8b9981;margin-top:9px}
+@media(max-width:620px){.detail-location{margin:20px 0 23px}.detail-location .trip-map-wrap{height:235px;min-height:235px}.detail-location-actions{gap:7px}.detail-location-actions>a,.detail-location-actions>button{font-size:10px;gap:5px;padding:11px 5px}.detail-location-actions svg{width:14px}.detail-location-placeholder{min-height:180px}.detail-location-note{font-size:8px}}
