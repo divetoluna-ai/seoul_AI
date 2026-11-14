@@ -26,6 +26,7 @@ const server = http.createServer(async (req, res) => {
     const authRoute = url.pathname.startsWith('/api/auth/');
     const routes = [
       [/^\/api\/auth\/session$/, ['GET', 'HEAD']],
+      [/^\/api\/auth\/avatar$/, ['GET', 'HEAD', 'PUT']],
       [/^\/api\/auth\/kakao(?:\/callback)?$/, ['GET']],
       [/^\/api\/auth\/logout$/, ['POST']],
       [/^\/api\/auth\/dogs$/, ['GET', 'HEAD', 'POST']],

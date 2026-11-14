@@ -26,6 +26,8 @@ auth:
   sessions-file: ${AUTH_SESSIONS_FILE:./data/auth-sessions.json}
 community:
   store: ${COMMUNITY_STORE:./data/course-community.json}
+avatar:
+  store: ${AVATAR_STORE:./data/avatar-designs.json}
 logging:
   level:
     org.springframework.web.client: WARN

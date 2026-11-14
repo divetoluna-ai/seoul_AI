@@ -6,4 +6,5 @@
 .current-category{font-size:10px;font-weight:500;padding:4px 7px;background:#edf1e6;color:#627a52;border-radius:4px;white-space:nowrap}
 .card-source{display:block;font-size:8px;color:#8d9784;margin-top:5px}.source-attribution{font-size:10px;line-height:1.8;color:#7b8970;margin-top:8px}.csv-footer-source{font-size:9px;color:#8c9682}.retry-link{text-decoration:underline;text-underline-offset:3px;font-size:inherit;padding:0 4px}
 @media(max-width:620px){.category-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.category-option{min-width:0;text-align:left}.results-toolbar>div:first-child{flex-wrap:wrap}.results-toolbar h3{flex-wrap:wrap}.current-category{font-size:9px}.card-category{letter-spacing:.3px}}
+@media(max-width:768px){.hero{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
