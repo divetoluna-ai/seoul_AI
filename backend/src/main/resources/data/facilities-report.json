@@ -1,54 +1,85 @@
 {
   "source": "한국문화정보원_전국 반려동물 동반 가능 문화시설 위치 데이터_20250324.csv",
   "sourceSha256": "2f88bedff41a8b9f032abd16ce2fb0bc31d91ec28ee559e6e79c2559a2f45928",
-  "sourceRows": 73558,
+  "sourceRows": 83976,
   "csvSourceRows": 70650,
-  "csvIncluded": 8191,
+  "csvIncluded": 8190,
   "registrySources": [
     {
       "source": "반려동물_동반가능_업소현황(2026.11.14 9시39분 기준).xlsx",
       "sourceSha256": "d7022b10836cbba810caa900cfd562a8f8124d263c2512d6e24bf2a7dbe16f95",
       "sourceRows": 2908,
       "snapshot": "2026-11-14",
-      "added": 2856,
+      "added": 2848,
       "merged_existing": 33,
-      "duplicates": 19
+      "duplicates": 19,
+      "invalid_name": 8
     }
   ],
+  "supplementalSources": [
+    {
+      "source": "반려동물_동반가능_업소1.csv",
+      "sourceSha256": "9086e0d6e5daa012535cc1a6868de1e143e5c4e24ac27d620bf5995daefa76d9",
+      "sourceRows": 5209,
+      "encoding": "utf-8-sig",
+      "added": 2245,
+      "merged_existing": 2934,
+      "duplicates": 20,
+      "invalid_name": 8,
+      "unrelated_category": 2
+    },
+    {
+      "source": "반려동물_동반가능_업소2.csv",
+      "sourceSha256": "9086e0d6e5daa012535cc1a6868de1e143e5c4e24ac27d620bf5995daefa76d9",
+      "sourceRows": 5209,
+      "encoding": "utf-8-sig",
+      "duplicateOf": "반려동물_동반가능_업소1.csv",
+      "duplicate_file": 5209
+    }
+  ],
+  "qualityExcluded": 19,
   "excluded": {
     "medical": 58824,
     "not_pet_friendly": 2799,
     "duplicates": 836,
+    "unrelated_business": 1,
     "registry_merged_existing": 33,
-    "registry_duplicates": 19
+    "registry_duplicates": 19,
+    "registry_invalid_name": 8,
+    "supplemental_merged_existing": 2934,
+    "supplemental_duplicates": 20,
+    "supplemental_invalid_name": 8,
+    "supplemental_unrelated_category": 2,
+    "supplemental_duplicate_file": 5209
   },
-  "included": 11047,
+  "included": 13283,
   "byCategory": {
-    "attraction": 872,
-    "care": 2058,
+    "attraction": 1019,
+    "care": 2072,
     "culture": 224,
-    "restaurant": 3671,
-    "shopping": 3814,
-    "stay": 408
+    "leisure": 32,
+    "restaurant": 3870,
+    "shopping": 3804,
+    "stay": 2262
   },
   "byRegion": {
-    "11": 1800,
-    "26": 622,
-    "27": 434,
-    "28": 697,
-    "29": 248,
-    "30": 331,
-    "31": 182,
-    "36": 51,
-    "41": 3148,
-    "43": 318,
-    "44": 457,
-    "46": 341,
-    "47": 416,
-    "48": 720,
-    "50": 354,
-    "51": 560,
-    "52": 368
+    "11": 1814,
+    "26": 624,
+    "27": 453,
+    "28": 884,
+    "29": 249,
+    "30": 340,
+    "31": 194,
+    "36": 54,
+    "41": 3534,
+    "43": 484,
+    "44": 652,
+    "46": 420,
+    "47": 635,
+    "48": 859,
+    "50": 369,
+    "51": 1302,
+    "52": 416
   },
   "rules": [
     "Exclude medical categories and facility names containing hospital/pharmacy",
@@ -56,6 +87,9 @@
     "Normalize whitespace, null markers, province codes and coordinates",
     "Deduplicate normalized name and address; prefer the newest complete record",
     "Include user-supplied registry workbooks; merge an unambiguous name and street match",
-    "Keep missing registry coordinates empty; resolve addresses on explicit course selection"
+    "Merge supplemental pet-friendly CSVs and skip byte-identical files",
+    "Use shared category, business and corrupted-name exclusions for imports and live API results",
+    "Decode name HTML entities; retain legitimate short, numeric and foreign-language brands",
+    "Keep missing coordinates and source dates empty; enrich only from matching supplied records"
   ]
 }

@@ -1,12 +1,10 @@
-export const communityCategories = { all: '전체 이야기', info: '정보 공유', walk: '산책·동네 모임', market: '중고·나눔' };
-export type CommunityCategory = 'info' | 'walk' | 'market';
-export type Profile = { id: string; nickname: string; petName: string; region: string; district: string };
-export type CommunityPost = { id: string; category: CommunityCategory; title: string; content: string; region: string; district: string; tradeType: string; price: number | null; image: string; meetingAt: string; meetingPlace: string; capacity: number; status: string; createdAt: string };
-export type PostView = { post: CommunityPost; author: Profile; commentCount: number; likeCount: number; participantCount: number; mine: boolean; liked: boolean; joined: boolean };
-export type PostDetail = { item: PostView; comments: { comment: { id: string; content: string; createdAt: string }; author: Profile; mine: boolean }[] };
-export type Feed = { items: PostView[]; total: number; page: number; pageSize: number };
-export type Conversation = { id: string; postId: string; title: string; neighbor: Profile; lastMessage: string; updatedAt: string };
-export type ConversationDetail = { conversation: Conversation; messages: { message: { id: string; content: string; createdAt: string }; mine: boolean }[] };
+import type { Place } from './lib.ts';
+import { coordinatesOf, MAX_STOPS } from './trip.ts';
+
+export type Profile = { id: string; nickname: string; petName: string };
+export type SharedCourse = { id: string; title: string; content: string; region: string; stops: Place[]; createdAt: string; updatedAt: string };
+export type CourseView = { course: SharedCourse; author: Profile; likeCount: number; mine: boolean; liked: boolean };
+export type CourseFeed = { items: CourseView[]; total: number; page: number; pageSize: number };
 export async function communityApi<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/community${path}`, { method, credentials: 'same-origin', signal,
     headers: method === 'GET' ? undefined : { 'Content-Type': 'application/json', 'X-Community-Client': 'web' },
@@ -18,26 +16,22 @@ export async function communityApi<T>(path: string, method = 'GET', body?: unkno
   return response.status === 204 ? undefined as T : response.json();
 }
 export function communityDate(date: string) {
-  return new Date(date).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
 }
-export function postStatus(post: CommunityPost) {
-  if (post.category === 'info') return '동네 정보';
-  if (post.category === 'market') return { open: '거래 가능', reserved: '예약 중', done: '거래 완료' }[post.status] || '거래 가능';
-  return post.status === 'done' || new Date(post.meetingAt).getTime() <= Date.now() ? '모집 마감' : '이웃 모집 중';
+export function isCommunityHash(hash: string) { return hash === '#community' || hash.startsWith('#community/course/'); }
+export function courseIdFromHash(hash: string) {
+  return /^#community\/course\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/.exec(hash)?.[1] || '';
 }
-export function postPrice(post: CommunityPost) { return post.tradeType === 'share' ? '무료 나눔' : `${(post.price || 0).toLocaleString('ko-KR')}원`; }
-
-export async function preparePhoto(file: File): Promise<string> {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('JPG·PNG·WebP 사진을 선택해주세요.');
-  if (file.size > 10 * 1024 * 1024) throw new Error('10MB 이하 사진을 선택해주세요.');
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image(); image.src = url; await image.decode();
-    const scale = Math.min(1, 1200 / Math.max(image.width, image.height));
-    const canvas = document.createElement('canvas'); canvas.width = Math.round(image.width * scale); canvas.height = Math.round(image.height * scale);
-    const context = canvas.getContext('2d'); if (!context) throw new Error('사진을 처리하지 못했어요.');
-    context.fillStyle = '#ffffff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    for (const quality of [0.8, 0.6, 0.4]) { const result = canvas.toDataURL('image/jpeg', quality); if (result.length <= 680000) return result; }
-    throw new Error('사진이 너무 커요. 더 작은 사진을 선택해주세요.');
-  } finally { URL.revokeObjectURL(url); }
+export function courseShareUrl(id: string, href: string) {
+  if (!courseIdFromHash(`#community/course/${id}`)) throw new Error('공유할 코스를 확인해주세요.');
+  const url = new URL(href); url.hash = `community/course/${id}`; return url.toString();
+}
+export function courseInput(title: string, content: string, region: string, stops: Place[]) {
+  if (stops.length < 2 || stops.length > MAX_STOPS) throw new Error(`공유할 코스에 장소를 2~${MAX_STOPS}곳 담아주세요.`);
+  if (new Set(stops.map(p => p.id)).size !== stops.length) throw new Error('같은 장소는 한 번만 담아주세요.');
+  const entries = stops.map(p => {
+    if (!/^(?:[0-9]{1,20}|csv-[a-f0-9]{20})$/.test(p.id) || !coordinatesOf(p)) throw new Error('장소의 위치를 확인한 뒤 공유해주세요.');
+    return { id: p.id, latitude: p.latitude, longitude: p.longitude };
+  });
+  return { title: title.trim(), content: content.trim(), region, stops: entries };
 }

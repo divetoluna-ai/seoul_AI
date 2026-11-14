@@ -1,6 +1,6 @@
 # 댕댕여지도 · Pet Tour
 
-반려동물과 함께 갈 장소를 찾고 여행 코스를 만드는 웹 앱입니다. 장소 검색·상세 지도·카카오맵 사진 보완·사진 우선 정렬·즐겨찾기·자동차 경로·동네 커뮤니티를 제공합니다.
+반려동물과 함께 갈 장소를 찾고 여행 코스를 만드는 웹 앱입니다. 장소 검색·상세 지도·카카오맵 사진 보완·사진 우선 정렬·즐겨찾기·자동차 경로·코스 공유 커뮤니티를 제공합니다.
 
 ## 필요한 프로그램
 
@@ -50,7 +50,7 @@ PORT=8080
 KAKAO_PHOTOS_ENABLED=true
 KAKAO_PHOTOS_CACHE_FILE=./data/kakao-photos.json
 KAKAO_PHOTOS_MIN_INTERVAL_MS=1100
-COMMUNITY_STORE=./data/community.json
+COMMUNITY_STORE=./data/course-community.json
 ```
 
 | 변수 | 용도 | 기본값 / 필요 여부 |
@@ -60,7 +60,7 @@ COMMUNITY_STORE=./data/community.json
 | `KAKAO_PHOTOS_ENABLED` | 카카오맵 대표 사진 수집·캐시 사용 | `true`. `false`로 비활성화할 수 있습니다. |
 | `KAKAO_PHOTOS_CACHE_FILE` | 수집한 사진 URL·출처 캐시 파일 | `./data/kakao-photos.json` |
 | `KAKAO_PHOTOS_MIN_INTERVAL_MS` | 서버의 사진 수집 요청 시작 간격 | `1100`밀리초 |
-| `COMMUNITY_STORE` | 커뮤니티 프로필·게시글·댓글·대화 저장 파일 | `./data/community.json` |
+| `COMMUNITY_STORE` | 여행자 프로필·공유 코스·좋아요 저장 파일 | `./data/course-community.json` |
 
 백엔드는 실행 위치가 프로젝트 루트 또는 `backend`일 때 `.env`를 읽습니다. 같은 이름의 운영체제 환경변수가 있으면 그 값이 우선합니다. 저장 경로는 백엔드 프로세스의 실행 폴더를 기준으로 해석됩니다. 설정 변경 후 백엔드를 재시작합니다.
 
@@ -119,15 +119,15 @@ npm run build
 node scripts/share-preview.mjs
 ```
 
-공유 서버는 **http://127.0.0.1:4174**에서 빌드 파일과 허용된 API를 제공합니다. Tailscale Serve 등에서 이 주소로 프록시하고, 생성된 HTTPS 주소를 카카오 JavaScript SDK 도메인에 추가합니다. 커뮤니티 API와 사진 수집 요청도 같은 주소로 전달됩니다. 단순 정적 파일 서버만 사용하면 `/api`가 연결되지 않습니다.
+공유 서버는 **http://127.0.0.1:4174**에서 빌드 파일과 허용된 API를 제공합니다. Tailscale Serve 등에서 이 주소로 프록시하고, 생성된 HTTPS 주소를 카카오 JavaScript SDK 도메인에 추가합니다. 코스 공유 API와 사진 수집 요청도 같은 주소로 전달됩니다. 단순 정적 파일 서버만 사용하면 `/api`가 연결되지 않습니다.
 
 Vite 개발 서버는 기본적으로 로컬에서만 접속합니다. 외부 공유 시 위 공유 서버를 프록시하는 방식을 사용합니다. 현재 위치 기능은 HTTPS 또는 localhost에서 사용할 수 있습니다. 자세한 임시 공유 절차는 [SHARE.md](SHARE.md)를 참고하세요.
 
 ## 데이터와 저장 파일
 
-- 원본 CSV·XLSX, 정제된 11,047곳의 로컬 자료와 정제 스크립트를 포함합니다. 관광공사 자료는 인증키가 있으면 조회 시 통합합니다.
+- 원본 CSV·XLSX·추가 동반 가능 CSV, 정제된 13,283곳의 로컬 자료와 정제 스크립트를 포함합니다. 관광공사 자료는 인증키가 있으면 조회 시 통합합니다.
 - 기본 정렬은 **사진 있는 장소 우선**입니다. 카카오맵 사진은 같은 업체로 확인된 장소의 대표 사진 **1장**을 보완하며, 화면에 보이는 장소부터 수집합니다. 수집 URL은 7일간 캐시합니다.
-- 개인 대화가 포함되는 `backend/data/community.json`, 사진 수집 캐시, 실제 `.env`, 빌드 결과와 `node_modules`는 저장소에 포함하지 않습니다. 다른 실행 환경에서는 필요한 저장 파일이 자동 생성됩니다.
-- 즐겨찾기와 여행 코스는 각 브라우저의 로컬 저장소에 저장합니다. 커뮤니티는 단일 백엔드의 JSON 파일을 사용합니다.
+- 프로필·공유 코스가 저장되는 `backend/data/course-community.json`, 사진 수집 캐시, 실제 `.env`, 빌드 결과와 `node_modules`는 저장소에 포함하지 않습니다. 다른 실행 환경에서는 필요한 저장 파일이 자동 생성됩니다.
+- 즐겨찾기와 여행 코스는 각 브라우저의 로컬 저장소에 저장합니다. 공유 커뮤니티는 단일 백엔드의 JSON 파일을 사용합니다. 여러 사람이 같은 코스를 보려면 같은 서버 주소에 접속해야 합니다.
 
 기능별 설명: [장소 데이터](DATA.md) · [지도와 여행 코스](ROUTES.md) · [커뮤니티](COMMUNITY.md).
