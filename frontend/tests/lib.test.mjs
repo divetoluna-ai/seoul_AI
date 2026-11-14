@@ -19,7 +19,7 @@ test('photos appear first without changing the order within each group or mutati
 test('recovers from corrupt or unavailable browser storage', () => {
   globalThis.localStorage = { getItem: () => '{' };
   assert.deepEqual(loadSaved(), []);
-  globalThis.localStorage = { getItem: () => '[null,{}, {"id":"1","name":"a","address":"b","image":""}]' };
+  globalThis.localStorage = { getItem: () => '[null,{}, {"id":"1","name":"a","address":"b","image":"","category":"restaurant"}]' };
   assert.equal(loadSaved().length, 1);
   globalThis.localStorage = { getItem: () => { throw Error('blocked'); } };
   assert.deepEqual(loadSaved(), []);

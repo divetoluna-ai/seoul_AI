@@ -25,6 +25,8 @@ public class CsvFacilities {
                 String source = text(n,"source").isBlank() ? "csv" : text(n,"source");
                 var p = new Place(text(n,"id"), text(n,"name"), text(n,"category"), text(n,"address"), "",
                     text(n,"phone"), text(n,"longitude"), text(n,"latitude"), text(n,"modified"), source);
+                if (!PlaceQuality.allowed(p)) continue;
+                p = PlaceQuality.clean(p);
                 var d = new Detail(p, text(n,"overview"), text(n,"hours"), text(n,"restDay"), text(n,"parking"),
                     text(n,"animals"), text(n,"requirements"), text(n,"facilities"), text(n,"other"), "local");
                 result.add(new Facility(p, text(n,"region"), text(n,"district"), d));

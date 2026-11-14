@@ -13,12 +13,19 @@ tour:
   api-key: ${TOUR_API_KEY:}
   base-url: https://apis.data.go.kr/B551011/KorPetTourService2
 kakao:
+  login:
+    rest-api-key: ${KAKAO_LOGIN_REST_API_KEY:}
+    client-secret: ${KAKAO_LOGIN_CLIENT_SECRET:}
+    redirect-uri: ${KAKAO_LOGIN_REDIRECT_URI:http://localhost:5173/api/auth/kakao/callback}
   photos:
     enabled: ${KAKAO_PHOTOS_ENABLED:true}
     cache-file: ${KAKAO_PHOTOS_CACHE_FILE:./data/kakao-photos.json}
     min-interval-ms: ${KAKAO_PHOTOS_MIN_INTERVAL_MS:1100}
+auth:
+  members-file: ${AUTH_MEMBERS_FILE:./data/members.json}
+  sessions-file: ${AUTH_SESSIONS_FILE:./data/auth-sessions.json}
 community:
-  store: ${COMMUNITY_STORE:./data/community.json}
+  store: ${COMMUNITY_STORE:./data/course-community.json}
 logging:
   level:
     org.springframework.web.client: WARN

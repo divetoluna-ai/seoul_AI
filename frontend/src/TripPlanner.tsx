@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Car, Check, Clock3, LocateFixed, LoaderCircle, MapPin, Navigation, Plus, RotateCcw, Route, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Car, Check, Clock3, LocateFixed, LoaderCircle, MapPin, Navigation, Plus, RotateCcw, Route, Share2, Trash2, X } from 'lucide-react';
 import type { Place } from './lib';
 import { categoryLabel } from './lib';
 import { coordinatesOf, fetchRoadRoute, formatDistance, formatDuration, MAX_STOPS, routeKey, type Coordinate, type RoadRoute } from './trip';
 import TripMap from './KakaoTripMap';
 import './trip.css';
+import PointsPanel from './PointsPanel';
+import ShareTrip from './ShareTrip';
 
-export default function TripPlanner({ stops, onChange, onBrowse }: { stops: Place[]; onChange: (stops: Place[]) => void; onBrowse: () => void }) {
+export default function TripPlanner({ stops, onChange, onBrowse, onShare }: { stops: Place[]; onChange: (stops: Place[]) => void; onBrowse: () => void; onShare: () => void }) {
   const [origin, setOrigin] = useState<Coordinate | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
@@ -93,6 +95,9 @@ export default function TripPlanner({ stops, onChange, onBrowse }: { stops: Plac
         </li>;
       })}</ol> : <div className="trip-empty"><div><MapPin size={27}/><Route size={18}/></div><h4>한 곳씩 담아, 여행을 완성해요</h4><p>맛있는 식사, 느긋한 커피, 편안한 하룻밤.<br/>마음에 드는 장소에서 ‘코스에 담기’를 눌러주세요.</p></div>}
       <button className="trip-add" onClick={onBrowse} disabled={stops.length >= MAX_STOPS}><Plus size={16}/>{stops.length >= MAX_STOPS ? `최대 ${MAX_STOPS}곳까지 담을 수 있어요` : '방문할 장소 고르기'}</button>
+      <button className="trip-community-share" onClick={onShare} disabled={stops.length < 2}><Share2 size={16}/> 이 코스 커뮤니티에 공유하기</button>
+      <ShareTrip stops={stops}/>
+      <PointsPanel/>
       <p className="trip-location-privacy">현재 위치는 출발점 설정에만 사용해요. 코스에 담을 때 장소 주소를 카카오에 조회하고, 경로 계산 시 위치와 선택 장소의 좌표를 외부 경로 서비스로 전송해요.</p>
     </div><div className="trip-map-panel"><TripMap stops={stops} origin={origin} route={route}/>
       <div className="trip-route-summary" aria-live="polite" aria-atomic="true">

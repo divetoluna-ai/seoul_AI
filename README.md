@@ -1,6 +1,6 @@
 # 댕댕여지도 · Pet Tour
 
-반려동물과 함께 갈 장소를 찾고 여행 코스를 만드는 웹 앱입니다. 장소 검색·상세 지도·카카오맵 사진 보완·사진 우선 정렬·즐겨찾기·자동차 경로·동네 커뮤니티를 제공합니다.
+반려동물과 함께 갈 장소를 찾고 여행 코스를 만드는 웹 앱입니다. 장소 검색·상세 지도·카카오맵 사진 보완·사진 우선 정렬·즐겨찾기·자동차 경로·코스 공유 커뮤니티·카카오 로그인을 제공합니다.
 
 ## 필요한 프로그램
 
@@ -50,7 +50,9 @@ PORT=8080
 KAKAO_PHOTOS_ENABLED=true
 KAKAO_PHOTOS_CACHE_FILE=./data/kakao-photos.json
 KAKAO_PHOTOS_MIN_INTERVAL_MS=1100
-COMMUNITY_STORE=./data/community.json
+COMMUNITY_STORE=./data/course-community.json
+AUTH_MEMBERS_FILE=./data/members.json
+AUTH_SESSIONS_FILE=./data/auth-sessions.json
 ```
 
 | 변수 | 용도 | 기본값 / 필요 여부 |
@@ -60,11 +62,29 @@ COMMUNITY_STORE=./data/community.json
 | `KAKAO_PHOTOS_ENABLED` | 카카오맵 대표 사진 수집·캐시 사용 | `true`. `false`로 비활성화할 수 있습니다. |
 | `KAKAO_PHOTOS_CACHE_FILE` | 수집한 사진 URL·출처 캐시 파일 | `./data/kakao-photos.json` |
 | `KAKAO_PHOTOS_MIN_INTERVAL_MS` | 서버의 사진 수집 요청 시작 간격 | `1100`밀리초 |
-| `COMMUNITY_STORE` | 커뮤니티 프로필·게시글·댓글·대화 저장 파일 | `./data/community.json` |
+| `COMMUNITY_STORE` | 여행자 프로필·공유 코스·좋아요·포인트 저장 파일 | `./data/course-community.json` |
+| `AUTH_MEMBERS_FILE` | 카카오 회원 정보 JSON 파일 | `./data/members.json` |
+| `AUTH_SESSIONS_FILE` | 로그인 세션·진행 중인 인증 요청 JSON 파일 | `./data/auth-sessions.json` |
 
 백엔드는 실행 위치가 프로젝트 루트 또는 `backend`일 때 `.env`를 읽습니다. 같은 이름의 운영체제 환경변수가 있으면 그 값이 우선합니다. 저장 경로는 백엔드 프로세스의 실행 폴더를 기준으로 해석됩니다. 설정 변경 후 백엔드를 재시작합니다.
 
 인증키는 [공공데이터포털](https://www.data.go.kr/)에서 `한국관광공사 반려동물 동반여행 서비스`를 찾아 활용 신청 후 발급받습니다. 일반 인증키의 디코딩 값과 인코딩 값 모두 처리합니다.
+
+### 카카오 로그인 설정
+
+1. [카카오디벨로퍼스](https://developers.kakao.com/console/app)에서 앱을 선택하고 **카카오 로그인 → 사용 설정**을 켭니다.
+2. **앱 → 플랫폼 키 → REST API 키**에서 해당 키에 리다이렉트 URI를 등록합니다. 로컬 기본값은 `http://localhost:5173/api/auth/kakao/callback`입니다. 공개 주소로 공유할 때는 외부 HTTPS 주소의 `/api/auth/kakao/callback`을 등록하고 아래 값도 동일하게 지정합니다.
+3. 같은 REST API 키의 클라이언트 시크릿이 활성화되어 있으면 그 값을 함께 입력합니다. 카카오 닉네임을 표시하려면 **카카오 로그인 → 동의항목**에서 닉네임을 설정합니다. 제공받은 닉네임이 없으면 `카카오 회원`으로 표시합니다. [카카오 로그인 설정 가이드](https://developers.kakao.com/docs/ko/kakaologin/prerequisite)
+
+`backend/.env`에 다음 값을 추가한 뒤 백엔드를 재시작합니다.
+
+```dotenv
+KAKAO_LOGIN_REST_API_KEY=발급받은_카카오_REST_API_키
+KAKAO_LOGIN_CLIENT_SECRET=해당_REST_API_키의_클라이언트_시크릿
+KAKAO_LOGIN_REDIRECT_URI=http://localhost:5173/api/auth/kakao/callback
+```
+
+리다이렉트 URI에 지정한 사이트 주소로 접속해 상단의 **로그인 → 카카오 로그인**을 선택합니다. 첫 로그인 시 회원 계정이 생성되고, 이후 같은 카카오 계정으로 기존 회원 계정에 로그인합니다. 회원 정보는 `AUTH_MEMBERS_FILE`로 지정하는 파일에 저장됩니다(기본 `./data/members.json`). 로그인 세션은 `AUTH_SESSIONS_FILE`로 지정하는 JSON 파일에 저장됩니다(기본 `./data/auth-sessions.json`). 같은 파일과 브라우저 쿠키를 유지하면 서버 재시작 후에도 로그인 상태가 복원됩니다. 로그인은 발급 후 12시간 유효하고, 로그아웃하면 JSON에서도 해당 세션이 삭제되어 재시작 후 되살아나지 않습니다. 진행 중인 카카오 인증 요청도 최대 10분 동안 파일에 저장하고 한 번 사용한 요청은 즉시 삭제합니다. 기존 메모리 세션은 자동 이전되지 않으므로 업데이트 직후 한 번 다시 로그인해야 합니다. 커뮤니티 프로필과 브라우저에 저장된 즐겨찾기·여행 코스는 각각 기존 저장 방식을 사용합니다.
 
 ### `frontend/.env.local`
 
@@ -119,7 +139,7 @@ npm run build
 node scripts/share-preview.mjs
 ```
 
-공유 서버는 **http://127.0.0.1:4174**에서 빌드 파일과 허용된 API를 제공합니다. Tailscale Serve 등에서 이 주소로 프록시하고, 생성된 HTTPS 주소를 카카오 JavaScript SDK 도메인에 추가합니다. 커뮤니티 API와 사진 수집 요청도 같은 주소로 전달됩니다. 단순 정적 파일 서버만 사용하면 `/api`가 연결되지 않습니다.
+공유 서버는 **http://127.0.0.1:4174**에서 빌드 파일과 허용된 API를 제공합니다. Tailscale Serve 등에서 이 주소로 프록시하고, 생성된 HTTPS 주소를 카카오 JavaScript SDK 도메인에 추가합니다. 코스 공유 API와 사진 수집 요청도 같은 주소로 전달됩니다. 단순 정적 파일 서버만 사용하면 `/api`가 연결되지 않습니다.
 
 Vite 개발 서버는 기본적으로 로컬에서만 접속합니다. 외부 공유 시 위 공유 서버를 프록시하는 방식을 사용합니다. 현재 위치 기능은 HTTPS 또는 localhost에서 사용할 수 있습니다. 자세한 임시 공유 절차는 [SHARE.md](SHARE.md)를 참고하세요.
 
@@ -139,10 +159,22 @@ Vite 개발 서버는 기본적으로 로컬에서만 접속합니다. 외부 �
 
 ## 데이터와 저장 파일
 
-- 원본 CSV·XLSX, 정제된 11,047곳의 로컬 자료와 정제 스크립트를 포함합니다. 관광공사 자료는 인증키가 있으면 조회 시 통합합니다.
+- 원본 CSV·XLSX·추가 동반 가능 CSV, 정제된 13,283곳의 로컬 자료와 정제 스크립트를 포함합니다. 관광공사 자료는 인증키가 있으면 조회 시 통합합니다.
 - 기본 정렬은 **사진 있는 장소 우선**입니다. 카카오맵 사진은 같은 업체로 확인된 장소의 대표 사진 **1장**을 보완하며, 화면에 보이는 장소부터 수집합니다. 수집 URL은 7일간 캐시합니다.
-- 개인 대화가 포함되는 `backend/data/community.json`, 사진 수집 캐시, 실제 `.env`, 빌드 결과와 `node_modules`는 저장소에 포함하지 않습니다. 다른 실행 환경에서는 필요한 저장 파일이 자동 생성됩니다.
-- 즐겨찾기와 여행 코스는 각 브라우저의 로컬 저장소에 저장합니다. 커뮤니티는 단일 백엔드의 JSON 파일을 사용합니다.
+- 프로필·공유 코스가 저장되는 `backend/data/course-community.json`, 사진 수집 캐시, 실제 `.env`, 빌드 결과와 `node_modules`는 저장소에 포함하지 않습니다. 다른 실행 환경에서는 필요한 저장 파일이 자동 생성됩니다.
+- 즐겨찾기와 여행 코스는 각 브라우저의 로컬 저장소에 저장합니다. 공유 커뮤니티는 단일 백엔드의 JSON 파일을 사용합니다. 여러 사람이 같은 코스를 보려면 같은 서버 주소에 접속해야 합니다.
+
+### JSON 저장 방식
+
+| 데이터 | 기본 파일 (`backend`에서 실행 시) |
+| --- | --- |
+| 공유 게시글·코스·여행자 프로필·좋아요·포인트 | `backend/data/course-community.json` |
+| 카카오 회원 식별자와 닉네임 | `backend/data/members.json` |
+| 로그인 세션·유효기간·진행 중인 인증 요청 | `backend/data/auth-sessions.json` |
+
+필요한 파일은 첫 저장 시 자동 생성됩니다. 읽기 성능을 위해 메모리에 올려두지만 변경은 응답 전에 JSON 파일에 저장하며, 재시작하면 파일에서 복원합니다. 저장은 임시 파일을 작성한 후 교체하며, 파일 쓰기가 실패하면 해당 변경을 완료 처리하지 않습니다. 잘못된 JSON은 빈 데이터로 덮어쓰지 않고 시작 단계에서 오류를 표시합니다.
+
+로그인 쿠키 원문은 브라우저에만 두고 JSON에는 SHA-256 해시와 회원 ID·만료 시각을 저장합니다. 카카오 비밀번호·액세스 토큰은 저장하지 않습니다. 인증 대기 중인 PKCE 검증값은 인증 완료 또는 다음 저장 시 만료 정리됩니다. `data` 폴더는 개인정보가 포함된 서버 전용 파일이며 Git과 외부 공개 경로에서 제외합니다. 백업·복원할 때 세 파일을 함께 보관하고, **한 백엔드 프로세스에서만 사용**합니다. 여러 서버가 같은 JSON을 동시에 수정하는 구성은 지원하지 않습니다.
 
 기능별 설명: [장소 데이터](DATA.md) · [지도와 여행 코스](ROUTES.md) · [커뮤니티](COMMUNITY.md).
 

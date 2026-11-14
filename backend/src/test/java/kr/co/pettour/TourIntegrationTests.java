@@ -18,7 +18,7 @@ class TourIntegrationTests {
     @Test void regionFilterPaginationAndDetailsWork() throws Exception {
         var mapper = JsonMapper.builder().build();
         var first = mapper.readTree(get("/places?region=11").body());
-        assertEquals(1800, first.path("total").asInt());
+        assertEquals(1814, first.path("total").asInt());
         assertEquals("local", first.path("mode").asText());
         assertEquals(9, first.path("items").size());
         assertEquals(9, mapper.readTree(get("/places?region=11&page=2").body()).path("items").size());
@@ -29,7 +29,7 @@ class TourIntegrationTests {
         var places = mapper.readTree(get("/places?region=11&district="+district).body());
         assertTrue(places.path("total").asInt() > 0);
         for (var item : places.path("items")) {
-            assertTrue(java.util.Set.of("csv", "xlsx", "csv+xlsx").contains(item.path("source").asText()));
+            assertTrue(java.util.Set.of("csv", "xlsx", "csv+xlsx", "supplemental").contains(item.path("source").asText()));
             assertTrue(item.path("address").asText().contains("강남구"));
         }
         assertEquals(200, get("/places/"+first.path("items").get(0).path("id").asText()).statusCode());
