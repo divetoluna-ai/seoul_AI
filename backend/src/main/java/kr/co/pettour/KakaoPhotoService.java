@@ -62,6 +62,7 @@ public class KakaoPhotoService {
         var photo = photos.get(place.id());
         return photo != null && fingerprint(place).equals(photo.fingerprint()) && fresh(photo) ? withPhoto(place, photo) : place;
     }
+    boolean enabled() { return enabled; }
     public synchronized Result collect(Place place, Match match) {
         if (!enabled) return new Result("disabled", place);
         if (!place.image().isBlank()) return new Result("available", place);
@@ -158,7 +159,8 @@ public class KakaoPhotoService {
             if (!"https".equals(uri.getScheme()) || uri.getUserInfo() != null || uri.getPort() != -1 || uri.getHost() == null ||
                 !uri.getHost().matches("(?:img[1-4]|t[1-4])\\.(?:kakaocdn|daumcdn)\\.net")) return false;
             String decoded = URLDecoder.decode(image, StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
-            return decoded.contains("/local/kakaomapphoto/") || decoded.contains("/cfile/");
+            return decoded.contains("/local/kakaomapphoto/") || decoded.contains("/cfile/")
+                || java.util.regex.Pattern.compile("/(?:mystore|fiy_reboot/place)/[0-9a-f]{32}(?:[?&#/]|$)").matcher(decoded).find();
         } catch (RuntimeException ignored) { return false; }
     }
     private static boolean validPage(String url) { return url != null && url.matches("https://place\\.map\\.kakao\\.com/[0-9]{1,20}"); }

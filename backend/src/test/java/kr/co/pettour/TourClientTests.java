@@ -10,6 +10,21 @@ import tools.jackson.databind.json.JsonMapper;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TourClientTests {
+    @Test void rateLimitedRequestsBackOffInsteadOfRepeatingForEveryPhoto() throws Exception {
+        var requests = new java.util.concurrent.atomic.AtomicInteger();
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/limited", exchange -> {
+            requests.incrementAndGet(); exchange.getResponseHeaders().add("Retry-After", "120");
+            exchange.sendResponseHeaders(429, -1); exchange.close();
+        });
+        server.start();
+        try {
+            var client = new TourClient("secret", "http://127.0.0.1:" + server.getAddress().getPort(), JsonMapper.builder().build());
+            assertThrows(TourClient.TourUnavailableException.class, () -> client.get("limited", Map.of()));
+            assertThrows(TourClient.TourUnavailableException.class, () -> client.get("limited", Map.of()));
+            assertEquals(1, requests.get());
+        } finally { server.stop(0); }
+    }
     @Test void encodesCredentialsAndKeywordExactlyOnce() throws Exception {
         var request = new AtomicReference<String>();
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

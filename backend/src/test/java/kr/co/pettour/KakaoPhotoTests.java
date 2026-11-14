@@ -77,4 +77,16 @@ class KakaoPhotoTests {
         Files.writeString(directory.resolve("photos.json"), cache);
         assertTrue(service(id -> "").cached(place).image().isBlank());
     }
+    @Test void ownerAndProviderPhotoPathsAreAcceptedWhileLogosRemainExcluded() {
+        for (String path : java.util.List.of("mystore/85ED522073FB479E8787BF325B2EE183", "fiy_reboot/place/3AAD78A77FDB4FF5B6E34067738E38FF")) {
+            String direct = "https://t1.kakaocdn.net/" + path;
+            String thumbnail = "https://img1.kakaocdn.net/cthumb/local/C800x400.q50/?fname=" + java.net.URLEncoder.encode(direct, java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(KakaoPhotoService.validImage(direct));
+            assertTrue(KakaoPhotoService.validImage(thumbnail));
+            assertEquals(thumbnail, KakaoPhotoService.parse(place, match, html(thumbnail)).orElseThrow().image());
+        }
+        assertFalse(KakaoPhotoService.validImage("https://t1.kakaocdn.net/mystore/logo.png"));
+        assertFalse(KakaoPhotoService.validImage("https://t1.kakaocdn.net/fiy_reboot/place/map.png"));
+        assertFalse(KakaoPhotoService.validImage("https://evil.test/mystore/85ED522073FB479E8787BF325B2EE183"));
+    }
 }

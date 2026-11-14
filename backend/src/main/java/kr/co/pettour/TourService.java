@@ -118,14 +118,30 @@ public class TourService {
             .filter(e -> e.getValue().equals(value(n, "contenttypeid")))
             .map(Map.Entry::getKey).findFirst().orElse("other");
         return new Place(value(n, "contentid"), value(n, "title"), category,
-            (value(n, "addr1") + " " + value(n, "addr2")).trim(), imageUrl(firstValue(n, "firstimage", "firstimage2")), value(n, "tel"),
+            (value(n, "addr1") + " " + value(n, "addr2")).trim(), firstImage(n, "firstimage", "firstimage2"), value(n, "tel"),
             value(n, "mapx"), value(n, "mapy"), value(n, "modifiedtime"));
     }
     @Cacheable("tourImages")
     public String image(String id) {
-        for (var n : items(client.get("detailImage2", Map.of("contentId", id, "imageYN", "Y", "numOfRows", 10, "pageNo", 1)))) {
-            String url = imageUrl(firstValue(n, "originimgurl", "smallimageurl"));
-            if (!url.isBlank()) return url;
+        int page = 1, received = 0, total;
+        do {
+            var body = client.get("detailImage2", Map.of("contentId", id, "imageYN", "Y", "numOfRows", 20, "pageNo", page));
+            var batch = items(body);
+            total = body.path("totalCount").asInt();
+            for (var n : batch) {
+                String url = firstImage(n, "originimgurl", "smallimageurl");
+                if (!url.isBlank()) return url;
+            }
+            if (batch.isEmpty() && received < total) throw new TourClient.TourUnavailableException();
+            received += batch.size();
+            if (++page > 1000) throw new TourClient.TourUnavailableException();
+        } while (received < total);
+        return "";
+    }
+    private String firstImage(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String image = imageUrl(value(node, field));
+            if (!image.isBlank()) return image;
         }
         return "";
     }

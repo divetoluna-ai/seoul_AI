@@ -21,6 +21,7 @@ public class TourClient {
     private final String baseUrl;
     private final RestClient client;
     private final ObjectMapper mapper;
+    private volatile long retryAt;
 
     public TourClient(@Value("${tour.api-key}") String key, @Value("${tour.base-url}") String baseUrl, ObjectMapper mapper) {
         this.key = key.contains("%") ? URLDecoder.decode(key, StandardCharsets.UTF_8) : key;
@@ -34,6 +35,7 @@ public class TourClient {
     public boolean isDemo() { return key.isBlank(); }
 
     public JsonNode get(String operation, Map<String, ?> params) {
+        if (System.currentTimeMillis() < retryAt) throw new TourUnavailableException();
         var uri = UriComponentsBuilder.fromUriString(baseUrl + "/" + operation)
                 .queryParam("serviceKey", "{serviceKey}").queryParam("MobileOS", "ETC")
                 .queryParam("MobileApp", "PetTour").queryParam("_type", "json");
@@ -48,6 +50,14 @@ public class TourClient {
             if (!code.equals("0000") && !code.equals("00")) throw new IllegalStateException("Invalid upstream response");
             return response.path("body");
         } catch (Exception ex) {
+            if (ex instanceof org.springframework.web.client.RestClientResponseException response && response.getStatusCode().value() == 429) {
+                long seconds = 60;
+                try {
+                    if (response.getResponseHeaders() != null)
+                        seconds = Math.max(60, Math.min(3600, Long.parseLong(response.getResponseHeaders().getFirst("Retry-After"))));
+                } catch (NumberFormatException ignored) {}
+                retryAt = System.currentTimeMillis() + seconds * 1000;
+            }
             // Never expose exception messages: upstream URLs may contain the service key.
             throw new TourUnavailableException();
         }

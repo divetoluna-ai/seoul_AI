@@ -128,7 +128,7 @@ public class CombinedPlaceService {
             .findFirst().orElse(null);
     }
     private Place ensureImage(Place place, Place apiPlace) {
-        if (!place.image().isBlank()) return place;
+        if (!place.image().isBlank() && !"kakao".equals(place.imageSource())) return place;
         if (apiPlace != null && !client.isDemo()) {
             String image = apiPlace.image();
             if (image.isBlank()) {
