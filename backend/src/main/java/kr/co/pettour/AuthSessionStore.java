@@ -45,7 +45,7 @@ class AuthSessionStore {
         db = Files.exists(file) ? mapper.readValue(Files.readString(file), Snapshot.class) : new Snapshot(List.of(), List.of());
         if (db == null || db.attempts() == null || db.sessions() == null
                 || db.attempts().stream().anyMatch(a -> a == null || !digest(a.tokenHash()) || !digest(a.stateHash())
-                    || !token(a.verifier()) || a.section() == null || !Set.of("", "community", "explore").contains(a.section()) || a.expiresAt() <= 0)
+                    || !token(a.verifier()) || a.section() == null || !Set.of("", "community", "explore", "shop").contains(a.section()) || a.expiresAt() <= 0)
                 || db.sessions().stream().anyMatch(s -> s == null || !digest(s.tokenHash()) || s.memberId() == null
                     || s.memberId().isBlank() || s.expiresAt() <= 0))
             throw new IOException("Invalid authentication session store");

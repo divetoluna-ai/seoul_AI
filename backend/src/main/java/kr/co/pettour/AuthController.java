@@ -58,7 +58,7 @@ class AuthController {
     @GetMapping("/kakao")
     ResponseEntity<Void> start(@RequestParam(name = "section", defaultValue = "") String section, HttpServletRequest request) {
         String destination = switch (section) {
-            case "community", "explore" -> section;
+            case "community", "explore", "shop" -> section;
             default -> "";
         };
         if (!kakao.enabled()) return home(destination, "unavailable");

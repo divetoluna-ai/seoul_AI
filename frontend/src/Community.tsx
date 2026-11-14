@@ -5,7 +5,7 @@ import { communityApi as request, communityDate, courseIdFromHash, courseInput, 
 import { MAX_STOPS } from './trip';
 import CoursePreview from './CoursePreview';
 import './community.css';
-import PointsPanel from './PointsPanel';
+
 
 function Modal({ title, close, children, wide = false }: { title: string; close: () => void; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -146,7 +146,7 @@ export default function Community({ regions, tripStops, initialRegion, shareRequ
   return <main className="course-community">
     <section className="course-hero"><div className="container course-hero-inner"><div><div className="eyebrow"><span/> OUR ROUTES TOGETHER</div><h1>좋았던 길은,<br/><span>함께 나누고 싶으니까.</span></h1><p>우리 아이와 찾은 카페, 산책길, 하룻밤의 쉼.<br/>내가 만든 코스를 공유하고, 새로운 여행을 만나보세요.</p><button className="primary-button" disabled={!profileReady} onClick={startCreate}><Share2 size={17}/>{tripStops.length >= 2 ? '내 코스 공유하기' : '나만의 코스 만들기'}</button></div><div className="course-hero-art" aria-hidden="true"><div className="course-art-line"/><span><MapPin size={25}/><small>느긋한 산책</small></span><span><PawPrint size={35}/><small>우리만의 여행</small></span><span><Heart size={24}/><small>함께 나누는 코스</small></span></div></div></section>
     <section className="container course-community-content">
-      <PointsPanel onEditProfile={() => { setProfileForm({ nickname: profile?.nickname || '', petName: profile?.petName || '' }); setError(''); setProfileOpen(true); }}/>
+
       <div className="course-section-heading"><div><div className="eyebrow">A GOOD ROUTE IS WORTH SHARING</div><h2>함께 떠나는 코스 <Route size={24}/></h2><p>다른 여행자의 코스를 담아 나만의 순서로 이어가세요.</p></div><button className="course-profile" disabled={!profileReady} onClick={() => openProfile()}><span>{(profile?.nickname || '나').slice(0, 1)}</span><div>{profile?.nickname || '여행자 프로필 만들기'}<small>{profile?.petName ? `${profile.petName}와 함께하는 여행` : '닉네임으로 가볍게 시작해요'}</small></div></button></div>
       {!profileOpen && !composer && !selected && <ErrorMessage message={error}/>}
       <div className="course-current-plan"><Route size={22}/><div><strong>나의 여행 코스 <b>{tripStops.length}곳</b></strong><p>{tripStops.length ? tripStops.map(p => p.name).join(' → ') : '장소 둘러보기에서 방문할 곳을 순서대로 담아주세요.'}</p></div><button onClick={tripStops.length >= 2 ? startCreate : onBrowse} disabled={!profileReady}>{tripStops.length >= 2 ? <><Share2 size={15}/> 이 코스 공유하기</> : <><Plus size={15}/> 장소 고르기</>}</button></div>

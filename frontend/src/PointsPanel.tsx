@@ -70,7 +70,7 @@ export default function PointsPanel({ onEditProfile }: { onEditProfile?: () => v
     <div className="points-heading"><strong>{profile ? `${profile.nickname}님의 포인트` : '함께 나누고 포인트 받기'}</strong><span>{live ? `${pointNumber(live.total)} P` : '—'}</span></div>
     <p>지도·코스 공유 +10P · 좋아요 +1P</p>
     <small>같은 코스 공유와 같은 공유 코스의 좋아요는 각각 한 번 적립돼요.</small>
-    {!profile && !error && <a href="#community">커뮤니티에서 이웃 프로필을 만들면 적립할 수 있어요.</a>}
+
     <section className={`nfc-card ${live?.active ? 'nfc-active' : ''}`} aria-label="NFC 근접 적립 시뮬레이션">
       <div className="nfc-title"><strong><Radio size={18}/> 함께 있는 시간 적립</strong><span>가상 NFC · 시뮬레이션</span></div>
       <div className="nfc-pet"><span className="nfc-avatar" aria-hidden="true"><PawPrint size={28}/></span><div><strong>{nfc?.petName || profile?.petName || '등록한 반려동물'}</strong><small>{nfc?.petName ? `프로필 연결 태그 · ${nfc.tagId}` : '이웃 프로필에 반려동물 이름을 등록해주세요.'}</small></div><span className={`nfc-status ${live?.active ? 'active' : ''}`} role="status">{live?.active ? '3m 이내 · 적립 중' : '적립 대기'}</span></div>

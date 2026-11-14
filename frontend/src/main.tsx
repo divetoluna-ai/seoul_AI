@@ -20,7 +20,12 @@ function CategoryIcon({ category }: { category: string }) {
   return <Icon size={16}/>;
 }
 function App() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const onSessionChange = useCallback((value: boolean) => { setLoggedIn(value); setAuthReady(true); }, []);
   const [shop, setShop] = useState(window.location.hash === '#shop');
+  const showShop = shop && loggedIn;
+  useEffect(() => { if (shop && authReady && !loggedIn) { setShop(false); window.location.hash = 'explore'; } }, [shop, authReady, loggedIn]);
   useEffect(() => { const sync = () => setShop(window.location.hash === '#shop'); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, []);
   const [community, setCommunity] = useState(isCommunityHash(window.location.hash));
   useEffect(() => { const sync = () => setCommunity(isCommunityHash(window.location.hash)); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, []);
@@ -188,15 +193,15 @@ function App() {
     </section>}
     <header className="header"><div className="container header-inner">
       <a className="brand" href="#" onClick={() => { setCommunity(false); setSavedView(false); }} aria-label="댕댕여지도 홈"><span className="brand-icon"><PawPrint size={23} fill="currentColor"/></span>댕댕여지도<span className="brand-dot">.</span></a>
-      <nav className="community-nav" aria-label="주 메뉴"><button className={!community && !shop && !savedView ? 'nav active' : 'nav'} onClick={() => { setCommunity(false); setSavedView(false); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}>장소 둘러보기</button><button className={community ? 'nav active' : 'nav'} onClick={() => { setCommunity(true); window.location.hash = 'community'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>코스 공유</button><button className={shop ? 'nav active' : 'nav'} onClick={() => { window.location.hash = 'shop'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>포인트 상점</button><button className="nav" onClick={() => setGuide(true)}>동반 가이드</button></nav>
+      <nav className="community-nav" aria-label="주 메뉴"><button className={!community && !showShop && !savedView ? 'nav active' : 'nav'} onClick={() => { setCommunity(false); setSavedView(false); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}>장소 둘러보기</button><button className={community ? 'nav active' : 'nav'} onClick={() => { setCommunity(true); window.location.hash = 'community'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>코스 공유</button>{loggedIn && <button className={showShop ? 'nav active' : 'nav'} onClick={() => { window.location.hash = 'shop'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>포인트 상점</button>}<button className="nav" onClick={() => setGuide(true)}>동반 가이드</button></nav>
       <div className="header-actions">
         <button className={`saved-button ${savedView && !community ? 'selected' : ''}`} onClick={() => { setCommunity(false); setSavedView(community || !savedView); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}><Heart size={17}/> 저장한 장소 <span>{saved.length}</span></button>
-        <AccountMenu />
+        <AccountMenu onSessionChange={onSessionChange}/>
       </div>
     </div></header>
-    {shop && <PointShop/>}
-    {community && !shop && <Community regions={regions} tripStops={tripStops} initialRegion={region} shareRequest={shareRequest} onShareHandled={() => setShareRequest(0)} onImportCourse={importCourse} onBrowse={browseFromCommunity}/>}
-    <main hidden={community || shop}>
+    {showShop && <PointShop/>}
+    {community && !showShop && <Community regions={regions} tripStops={tripStops} initialRegion={region} shareRequest={shareRequest} onShareHandled={() => setShareRequest(0)} onImportCourse={importCourse} onBrowse={browseFromCommunity}/>}
+    <main hidden={community || showShop}>
       <section className="hero"><div className="container hero-inner">
         <div className="hero-copy"><div className="eyebrow"><span/> OUR LITTLE ADVENTURE</div><h1>좋은 곳엔,<br/>언제나 <span>함께 가개.</span></h1><p>초록빛 산책길부터, 하룻밤 쉬어갈 숙소까지.<br/>우리 아이와 함께할 다음 장소를 찾아보세요.</p><button className="hero-cta" onClick={scrollResults}>우리만의 여행 코스 만들기 <ArrowDown size={17}/></button><div className="hero-footnote"><ShieldCheck size={15}/> 한국관광공사 · 한국문화정보원 공공데이터 활용</div></div>
         <div className="hero-visual"><img src="/images/hero.jpg" alt="따뜻한 햇살을 받으며 쉬고 있는 반려견"/><div className="hero-image-shade"/><span className="image-caption">A little coffee. A little walk. A lot of love.</span><div className="hero-note"><span className="note-icon"><PawPrint size={22}/></span><div><small>오늘도 같이,</small><strong>발 닿는 곳 어디든</strong></div><Heart size={17} className="note-heart"/></div><span className="floating-paw"><PawPrint size={38}/></span></div>

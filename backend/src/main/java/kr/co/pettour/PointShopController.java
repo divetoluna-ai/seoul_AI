@@ -2,6 +2,8 @@ package kr.co.pettour;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.CookieValue;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import org.jsoup.Jsoup;
@@ -14,14 +16,20 @@ import java.util.*;
 /** Public merchant catalog only. No order creation or point deduction. */
 @RestController
 public class PointShopController {
+    private final AuthSessionStore sessions;
+    private final MemberStore members;
+    public PointShopController(AuthSessionStore sessions, MemberStore members) { this.sessions = sessions; this.members = members; }
     static final String SOURCE = "https://www.adorable-dog.com/";
     private Catalog cached;
     private Instant retryAfter = Instant.EPOCH;
     public record Product(String id, String name, int priceWon, String image, String url, boolean soldOut) {}
     public record Catalog(String source, String fetchedAt, boolean stale, List<Product> products) {}
 
-    @GetMapping("/api/shop/products")
-    public synchronized Catalog products() {
+    @GetMapping({"/api/auth/shop/products", "/api/shop/products"})
+    public synchronized Catalog products(@CookieValue(name=AuthController.SESSION_COOKIE, required=false) String token, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        if (members.find(sessions.memberId(token)) == null)
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인 후 포인트 상점을 이용해주세요.");
         Instant now = Instant.now();
         if (cached != null && now.isBefore(Instant.parse(cached.fetchedAt()).plus(Duration.ofHours(1)))) return cached;
         if (now.isBefore(retryAfter)) return fallback();

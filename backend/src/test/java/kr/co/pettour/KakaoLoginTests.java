@@ -154,6 +154,14 @@ class KakaoLoginTests {
         return new Attempt(cookie(response), query.getFirst("state"), query.getFirst("code_challenge"));
     }
 
+    @Test void loginReturnsToPointShop() throws Exception {
+        var attempt = start("shop");
+        permitSignIn(attempt, "포인트 여행자");
+        var response = callback(attempt, "code=approved");
+        assertRedirect("/#shop", response);
+        assertNotNull(session(cookie(response)).path("user").path("id").asString(null));
+    }
+
     private void permitSignIn(Attempt attempt, String nickname) {
         provider.expect(requestTo("https://kauth.kakao.com/oauth/token"))
                 .andExpect(method(HttpMethod.POST))

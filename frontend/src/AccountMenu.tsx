@@ -17,7 +17,7 @@ const callbackErrors: Record<string, string> = {
   unavailable: '아직 카카오 로그인 설정이 완료되지 않았어요.',
 };
 
-export default function AccountMenu() {
+export default function AccountMenu({ onSessionChange }: { onSessionChange: (loggedIn: boolean) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [sessionError, setSessionError] = useState('');
@@ -43,12 +43,21 @@ export default function AccountMenu() {
         if (!response.ok) throw new Error();
         return response.json() as Promise<Session>;
       })
-      .then(setSession)
+      .then(value => { setSession(value); onSessionChange(!!value.user); })
       .catch(() => {
-        if (!controller.signal.aborted) setSessionError('로그인 정보를 불러오지 못했어요.');
+        if (!controller.signal.aborted) { setSession(null); onSessionChange(false); setSessionError('로그인 정보를 불러오지 못했어요.'); }
       });
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, onSessionChange]);
+  useEffect(() => {
+    const refresh = () => setRetry(value => value + 1);
+    const expired = () => { setSession(current => current && { ...current, user: null }); onSessionChange(false); refresh(); };
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh); window.addEventListener('auth-session-expired', expired);
+    document.addEventListener('visibilitychange', visible);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('auth-session-expired', expired); document.removeEventListener('visibilitychange', visible); };
+  }, [onSessionChange]);
 
   async function logout() {
     setFeedback('');
@@ -59,6 +68,7 @@ export default function AccountMenu() {
       });
       if (!response.ok) throw new Error();
       setSession(current => current && { ...current, user: null });
+      onSessionChange(false);
       dialog.current?.close();
     } catch {
       setFeedback('로그아웃하지 못했어요. 다시 시도해주세요.');
