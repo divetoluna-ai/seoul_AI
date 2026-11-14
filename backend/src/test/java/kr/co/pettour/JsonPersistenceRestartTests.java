@@ -65,8 +65,8 @@ class JsonPersistenceRestartTests {
             memberId = mapper.readTree(call(app, "GET", "/api/auth/session", loginCookie, null).body()).path("user").path("id").asText();
             assertFalse(memberId.isBlank());
 
-            var profile = call(app, "POST", "/api/community/profile", null, Map.of("nickname", "재시작코스", "petName", "보리"));
-            assertEquals(200, profile.statusCode()); profileCookie = cookie(profile);
+            var profile = call(app, "POST", "/api/community/profile", loginCookie, Map.of("nickname", "재시작코스", "petName", "보리"));
+            assertEquals(200, profile.statusCode()); profileCookie = loginCookie;
             var stops = app.getBean(CsvFacilities.class).inRegion("11").stream().map(CsvFacilities.Facility::place)
                     .filter(p -> !p.latitude().isBlank() && !p.longitude().isBlank()).limit(2)
                     .map(p -> Map.of("id", p.id(), "latitude", p.latitude(), "longitude", p.longitude())).toList();

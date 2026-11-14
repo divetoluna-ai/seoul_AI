@@ -10,6 +10,7 @@ export async function communityApi<T>(path: string, method = 'GET', body?: unkno
     headers: method === 'GET' ? undefined : { 'Content-Type': 'application/json', 'X-Community-Client': 'web' },
     body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) {
+    if (response.status === 401 && response.headers.get('X-Auth-Required') === '1') window.dispatchEvent(new Event('auth-session-expired'));
     const error = await response.json().catch(() => ({}));
     throw new Error(error.message || '요청을 처리하지 못했어요. 연결을 확인하고 다시 시도해주세요.');
   }

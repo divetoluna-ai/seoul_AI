@@ -212,7 +212,7 @@ class KakaoLoginTests {
     private static String cookie(HttpResponse<String> response) {
         String cookie = response.headers().firstValue("set-cookie").orElseThrow();
         assertTrue(cookie.startsWith("daeng-session="));
-        assertTrue(cookie.contains("Path=/api/auth"));
+        assertTrue(cookie.contains("Path=/api;"));
         assertTrue(cookie.contains("HttpOnly"));
         assertTrue(cookie.contains("SameSite=Lax"));
         return cookie.split(";", 2)[0];

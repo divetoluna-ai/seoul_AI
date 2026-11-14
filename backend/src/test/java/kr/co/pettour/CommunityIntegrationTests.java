@@ -23,9 +23,12 @@ class CommunityIntegrationTests {
     @Autowired ObjectMapper mapper;
     @Autowired CombinedPlaceService catalog;
     @Autowired CsvFacilities csv;
+    @Autowired AuthSessionStore sessions;
+    @Autowired MemberStore members;
+    @Autowired CommunityService community;
     static final Path store;
     static { try { store = Files.createTempDirectory("pet-tour-course-test-").resolve("courses.json"); } catch (Exception ex) { throw new ExceptionInInitializerError(ex); } }
-    @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) { registry.add("community.store", store::toString); }
+    @DynamicPropertySource static void properties(DynamicPropertyRegistry registry) { registry.add("community.store", store::toString); registry.add("auth.members-file", () -> store.resolveSibling("members.json").toString()); registry.add("auth.sessions-file", () -> store.resolveSibling("sessions.json").toString()); }
     private final HttpClient client = HttpClient.newHttpClient();
     record Actor(String cookie, String nickname) {}
     HttpResponse<String> call(String method, String path, Object body, String cookie, boolean header) throws Exception {
@@ -43,11 +46,14 @@ class CommunityIntegrationTests {
     }
     Actor actor() throws Exception {
         String nick = "여행자" + UUID.randomUUID().toString().substring(0, 8);
-        var res = call(null, "POST", "/profile", Map.of("nickname", nick, "petName", "보리"));
+        var member = members.signIn(new KakaoLoginClient.User(UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE, nick));
+        String cookie = "daeng-session=" + sessions.signIn(member.id());
+        var res = call("POST", "/profile", Map.of("nickname", nick, "petName", "보리"), cookie, true);
         assertEquals(200, res.statusCode(), res.body());
-        String cookie = res.headers().firstValue("set-cookie").orElseThrow(); assertTrue(cookie.contains("HttpOnly")); assertTrue(cookie.contains("SameSite=Strict"));
-        assertFalse(res.body().contains("token")); return new Actor(cookie.split(";", 2)[0], nick);
+        assertTrue(res.headers().allValues("set-cookie").isEmpty());
+        assertFalse(res.body().contains("token")); return new Actor(cookie, nick);
     }
+    String memberKey(Actor actor) { return "member:" + sessions.memberId(actor.cookie.substring(actor.cookie.indexOf('=') + 1)); }
     List<Place> places() {
         return csv.inRegion("11").stream().map(CsvFacilities.Facility::place).filter(p -> !p.latitude().isBlank() && !p.longitude().isBlank()).limit(3).toList();
     }
@@ -77,7 +83,7 @@ class CommunityIntegrationTests {
         assertEquals(1, updated.path("likeCount").asInt());
         var reloaded = new CommunityService(mapper, catalog, store.toString());
         assertEquals(1, reloaded.detail(null, id).likeCount()); assertEquals(places().get(1).id(), reloaded.detail(null, id).course().stops().getFirst().id());
-        String token = owner.cookie.substring(owner.cookie.indexOf('=') + 1);
+        String token = memberKey(owner);
         assertNotNull(reloaded.me(token)); assertFalse(Files.readString(store).contains(token));
         ok(owner, "DELETE", "/courses/" + id, null); assertEquals(404, call(null, "GET", "/courses/" + id, null).statusCode());
     }
@@ -113,6 +119,45 @@ class CommunityIntegrationTests {
         assertEquals(400, call(null, "GET", "/courses?page=0", null).statusCode());
         assertEquals(400, call(null, "GET", "/courses?sort=wrong", null).statusCode());
         assertEquals(409, call(neighbor, "POST", "/profile", Map.of("nickname", owner.nickname, "petName", "")).statusCode());
+    }
+    @Test void legacyProfileCookiesAndRevokedLoginsCannotEarnPoints() throws Exception {
+        String legacy = "legacy-" + UUID.randomUUID();
+        community.saveProfile(legacy, new CommunityService.ProfileInput("이전" + UUID.randomUUID().toString().substring(0,8), "보리"));
+        String legacyCookie = "daeng-community=" + legacy;
+        var owner = actor(); var liker = actor();
+        String courseId = ok(owner, "POST", "/courses", course("로그인 적립 보호")).path("course").path("id").asText();
+        for (String cookie : List.of(legacyCookie, "daeng-session=invalid; " + legacyCookie)) {
+            assertEquals(401, call("POST", "/courses", course("비로그인 공유 차단"), cookie, true).statusCode());
+            assertEquals(401, call("POST", "/shares", Map.of("stops", List.of()), cookie, true).statusCode());
+            assertEquals(401, call("PUT", "/shares/any/complete", null, cookie, true).statusCode());
+            assertEquals(401, call("PUT", "/courses/" + courseId + "/like", Map.of("enabled",true), cookie, true).statusCode());
+            assertEquals(401, call("POST", "/nfc/heartbeat", null, cookie, true).statusCode());
+            assertTrue(mapper.readTree(call("GET", "/profile", null, cookie, true).body()).path("profile").isNull());
+        }
+        ok(liker, "PUT", "/courses/" + courseId + "/like", Map.of("enabled",true));
+        String token = liker.cookie.substring(liker.cookie.indexOf('=') + 1);
+        var relogin = new Actor("daeng-session=" + sessions.signIn(sessions.memberId(token)), liker.nickname);
+        sessions.revoke(token);
+        assertEquals(401, call(liker,"PUT","/courses/" + courseId + "/like",Map.of("enabled",false)).statusCode());
+        assertEquals(1, ok(relogin,"GET","/points",null).path("total").asInt());
+        ok(relogin,"PUT","/courses/" + courseId + "/like",Map.of("enabled",true));
+        assertEquals(1, ok(relogin,"GET","/points",null).path("total").asInt());
+        assertEquals(0, community.points(legacy).total());
+    }
+    @Test void browserCookieScopeSupportsCommunityAndLogoutRevokesIt() throws Exception {
+        var actor = actor();
+        var cookies = new java.net.CookieManager(null, java.net.CookiePolicy.ACCEPT_ALL);
+        var browser = HttpClient.newBuilder().cookieHandler(cookies).build();
+        String base = "http://localhost:" + port;
+        var session = browser.send(HttpRequest.newBuilder(URI.create(base + "/api/auth/session")).header("Cookie", actor.cookie).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, session.statusCode());
+        assertTrue(cookies.getCookieStore().getCookies().stream().anyMatch(c -> c.getName().equals("daeng-session") && c.getPath().equals("/api") && c.isHttpOnly()));
+        var points = browser.send(HttpRequest.newBuilder(URI.create(base + "/api/community/points")).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, points.statusCode());
+        var logout = browser.send(HttpRequest.newBuilder(URI.create(base + "/api/auth/logout")).header("X-Auth-Client", "web").POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(204, logout.statusCode());
+        assertTrue(logout.headers().allValues("Set-Cookie").stream().anyMatch(c -> c.contains("Path=/api/auth") && c.contains("Max-Age=0")));
+        assertEquals(401, browser.send(HttpRequest.newBuilder(URI.create(base + "/api/community/points")).GET().build(), HttpResponse.BodyHandlers.ofString()).statusCode());
     }
     @Test void formerBoardsMeetingsMarketAndChatRoutesAreRemoved() throws Exception {
         var owner = actor(); String id = UUID.randomUUID().toString();
@@ -167,7 +212,7 @@ class CommunityIntegrationTests {
         assertEquals(id, ok(owner, "POST", "/shares", Map.of("stops", List.of(renamed))).path("id").asText());
         assertEquals(10, ok(owner, "GET", "/points", null).path("total").asLong());
         var reloaded = new CommunityService(mapper, catalog, store.toString());
-        String token = owner.cookie.substring(owner.cookie.indexOf('=') + 1);
+        String token = memberKey(owner);
         assertEquals(10, reloaded.points(token).total()); assertEquals(0, reloaded.completeShare(token, id).awarded());
     }
     @Test void courseLikesAwardOncePerUserAndPersistAcrossProfileEdits() throws Exception {
@@ -181,7 +226,7 @@ class CommunityIntegrationTests {
         assertEquals(0, ok(owner, "GET", "/points", null).path("total").asLong());
         ok(neighbor, "POST", "/profile", Map.of("nickname", neighbor.nickname, "petName", "수정"));
         var reloaded = new CommunityService(mapper, catalog, store.toString());
-        assertEquals(1, reloaded.points(neighbor.cookie.substring(neighbor.cookie.indexOf('=') + 1)).total());
+        assertEquals(1, reloaded.points(memberKey(neighbor)).total());
     }
     @Test void preRewardCourseSnapshotsLoadAndFailedActionsRollBackTheirPoints() throws Exception {
         Path file = Files.createTempDirectory("course-rewards-").resolve("courses.json");

@@ -172,7 +172,7 @@ function App() {
     }
   };
   const showTrip = () => tripRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  const shareTrip = () => { setShareRequest(n => n + 1); setCommunity(true); window.location.hash = 'community'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const shareTrip = () => { if (!loggedIn) { setToast('로그인 후 공유할 수 있어요.'); return; } setShareRequest(n => n + 1); setCommunity(true); window.location.hash = 'community'; window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const importCourse = (stops: Place[]) => {
     tripGeneration.current++; tripStopsRef.current = stops; setTripStops(stops);
     setCommunity(false); window.location.hash = 'explore'; setToast('공유 코스를 내 여행 코스로 가져왔어요.'); requestAnimationFrame(showTrip);
@@ -200,14 +200,14 @@ function App() {
       </div>
     </div></header>
     {showShop && <PointShop/>}
-    {community && !showShop && <Community regions={regions} tripStops={tripStops} initialRegion={region} shareRequest={shareRequest} onShareHandled={() => setShareRequest(0)} onImportCourse={importCourse} onBrowse={browseFromCommunity}/>}
+    {community && !showShop && <Community loggedIn={loggedIn} regions={regions} tripStops={tripStops} initialRegion={region} shareRequest={shareRequest} onShareHandled={() => setShareRequest(0)} onImportCourse={importCourse} onBrowse={browseFromCommunity}/>}
     <main hidden={community || showShop}>
       <section className="hero"><div className="container hero-inner">
         <div className="hero-copy"><div className="eyebrow"><span/> OUR LITTLE ADVENTURE</div><h1>좋은 곳엔,<br/>언제나 <span>함께 가개.</span></h1><p>초록빛 산책길부터, 하룻밤 쉬어갈 숙소까지.<br/>우리 아이와 함께할 다음 장소를 찾아보세요.</p><button className="hero-cta" onClick={scrollResults}>우리만의 여행 코스 만들기 <ArrowDown size={17}/></button><div className="hero-footnote"><ShieldCheck size={15}/> 한국관광공사 · 한국문화정보원 공공데이터 활용</div></div>
         <div className="hero-visual"><img src="/images/hero.jpg" alt="따뜻한 햇살을 받으며 쉬고 있는 반려견"/><div className="hero-image-shade"/><span className="image-caption">A little coffee. A little walk. A lot of love.</span><div className="hero-note"><span className="note-icon"><PawPrint size={22}/></span><div><small>오늘도 같이,</small><strong>발 닿는 곳 어디든</strong></div><Heart size={17} className="note-heart"/></div><span className="floating-paw"><PawPrint size={38}/></span></div>
       </div></section>
       <section className="container explore" ref={resultsRef} id="explore">
-        <div ref={tripRef} className="trip-scroll-target"><TripPlanner onShare={shareTrip} stops={tripStops} onChange={next => { if (!next.length) tripGeneration.current++; setTripStops(next); }} onBrowse={browsePlaces}/></div>
+        <div ref={tripRef} className="trip-scroll-target"><TripPlanner loggedIn={loggedIn} onShare={shareTrip} stops={tripStops} onChange={next => { if (!next.length) tripGeneration.current++; setTripStops(next); }} onBrowse={browsePlaces}/></div>
         <div className="section-heading trip-browse-heading" ref={browseRef}><div><div className="eyebrow section-eyebrow">PLACES TOGETHER</div><h2>{savedView ? '다음엔 여기, 같이 가요' : '어디로 떠나볼까요?'}<PawPrint size={23}/></h2><p>{savedView ? '마음에 담아둔 우리만의 장소 모음이에요.' : '지역과 공간을 고르고, 마음에 드는 장소를 코스에 담아보세요.'}</p></div><button className="mobile-filter" onClick={() => setFiltersOpen(!filtersOpen)}><SlidersHorizontal size={18}/> 필터</button><span className="section-aside"><Leaf size={17}/> 함께하는 일상이 여행이 되도록</span></div>
         {mode === 'local' && <div className="demo-notice"><Info size={16}/><span><strong>동반 가능 장소 자료 조회 중</strong> · 문화시설 자료·동반가능 업소현황·추가 CSV를 함께 제공합니다. API 인증키를 설정하면 관광공사 자료도 함께 표시합니다.</span></div>}
         {result?.warning && <div className="demo-notice" role="status"><Info size={16}/><span>{result.warning} <button className="retry-link" onClick={() => setRetry(n => n + 1)}>다시 시도</button></span></div>}

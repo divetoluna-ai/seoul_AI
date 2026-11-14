@@ -28,7 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/auth")
 class AuthController {
     static final String SESSION_COOKIE = "daeng-session";
-    static final String COOKIE_PATH = "/api/auth";
+    static final String COOKIE_PATH = "/api";
     private static final Logger LOG = LoggerFactory.getLogger(AuthController.class);
 
     record SessionInfo(boolean enabled, String loginOrigin, MemberStore.Member user) {}
@@ -50,8 +50,12 @@ class AuthController {
     }
 
     @GetMapping("/session")
-    SessionInfo session(HttpServletRequest request) {
+    SessionInfo session(HttpServletRequest request, HttpServletResponse response) {
         var member = members.find(sessions.memberId(browserToken(request)));
+        if (member != null) {
+            response.addHeader(HttpHeaders.SET_COOKIE, cookie(browserToken(request), AuthSessionStore.SESSION_TIMEOUT));
+            response.addHeader(HttpHeaders.SET_COOKIE, legacyCookie());
+        }
         return new SessionInfo(kakao.enabled(), kakao.origin(), member);
     }
 
@@ -67,7 +71,7 @@ class AuthController {
         if (members.find(sessions.memberId(previousToken)) != null) return home(destination, "");
         var attempt = sessions.begin(previousToken, destination);
         return ResponseEntity.status(HttpStatus.SEE_OTHER).location(kakao.authorizationUrl(attempt.state(), challenge(attempt.verifier())))
-                .header(HttpHeaders.SET_COOKIE, cookie(attempt.token(), AuthSessionStore.LOGIN_WINDOW)).build();
+                .header(HttpHeaders.SET_COOKIE, cookie(attempt.token(), AuthSessionStore.LOGIN_WINDOW), legacyCookie()).build();
     }
 
     @GetMapping("/kakao/callback")
@@ -97,7 +101,7 @@ class AuthController {
             var member = members.signIn(user);
             String token = sessions.signIn(member.id());
             return ResponseEntity.status(HttpStatus.SEE_OTHER).location(homeUri(attempt.section(), ""))
-                    .header(HttpHeaders.SET_COOKIE, cookie(token, AuthSessionStore.SESSION_TIMEOUT)).build();
+                    .header(HttpHeaders.SET_COOKIE, cookie(token, AuthSessionStore.SESSION_TIMEOUT), legacyCookie()).build();
         } catch (IOException | RuntimeException ex) {
             LOG.warn("Could not complete the local Kakao sign-in ({})", ex.getClass().getSimpleName());
             return home(attempt.section(), "failed");
@@ -109,15 +113,18 @@ class AuthController {
                                 HttpServletRequest request) {
         if (!"web".equals(client)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         sessions.revoke(browserToken(request));
-        return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO)).build();
+        return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO), legacyCookie()).build();
     }
 
-    private static String browserToken(HttpServletRequest request) {
+    static String browserToken(HttpServletRequest request) {
         var cookies = request.getCookies();
         if (cookies != null) for (var cookie : cookies) if (SESSION_COOKIE.equals(cookie.getName())) return cookie.getValue();
         return null;
     }
 
+    private String legacyCookie() {
+        return ResponseCookie.from(SESSION_COOKIE, "").path("/api/auth").httpOnly(true).secure(kakao.secureCookie()).sameSite("Lax").maxAge(Duration.ZERO).build().toString();
+    }
     private String cookie(String token, Duration lifetime) {
         return ResponseCookie.from(SESSION_COOKIE, token).path(COOKIE_PATH).httpOnly(true)
                 .secure(kakao.secureCookie()).sameSite("Lax").maxAge(lifetime).build().toString();

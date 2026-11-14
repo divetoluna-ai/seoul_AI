@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Place } from './lib';
 import { communityApi, type Profile } from './community-api';
 import { deliverTripLink } from './share';
 
-export default function ShareTrip({ stops }: { stops: Place[] }) {
+export default function ShareTrip({ stops, loggedIn }: { stops: Place[]; loggedIn: boolean }) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [message, setMessage] = useState('');
@@ -11,6 +11,7 @@ export default function ShareTrip({ stops }: { stops: Place[] }) {
   const [link, setLink] = useState('');
   const [shareId, setShareId] = useState('');
   const [retryId, setRetryId] = useState('');
+  useEffect(() => { if (!loggedIn) { setLink(''); setRetryId(''); setMessage(''); setLoginRequired(false); } }, [loggedIn]);
   async function reward(id: string) {
     setRetryId(id);
     await communityApi<{ total: number; awarded: number }>(`/shares/${id}/complete`, 'PUT');
@@ -18,6 +19,7 @@ export default function ShareTrip({ stops }: { stops: Place[] }) {
     setMessage('공유했어요.');
   }
   async function share() {
+    if (!loggedIn) { setMessage('로그인 후 공유할 수 있어요.'); return; }
     if (pending.current) return;
     pending.current = true; setBusy(true); setMessage(''); setLoginRequired(false); setLink(''); setRetryId('');
     let delivered = false;
@@ -39,11 +41,12 @@ export default function ShareTrip({ stops }: { stops: Place[] }) {
     finally { pending.current = false; setBusy(false); }
   }
   return <div className="trip-share">
-    <button className="trip-add" disabled={busy || !stops.length} onClick={() => void share()}>{busy ? '공유 준비 중…' : '지도·코스 공유하기'}</button>
+    <button className="trip-add" disabled={!loggedIn || busy || !stops.length} onClick={() => void share()}>{busy ? '공유 준비 중…' : '지도·코스 공유하기'}</button>
+    {!loggedIn && <p>지도·코스 공유는 로그인 후 이용할 수 있어요.</p>}
     <small>함께 가고 싶은 지도·코스를 공유해보세요. 현재 위치는 공유하지 않아요.</small>
     {loginRequired && <p role="status"><a href="#community">이웃 프로필을 먼저 만들어주세요.</a> 프로필을 만든 뒤 돌아와 공유할 수 있어요.</p>}
     {message && <p role="status">{message}</p>}
-    {link && <><label>공유 링크<input readOnly value={link} onFocus={e => e.target.select()}/></label><button disabled={busy} onClick={async () => {
+    {loggedIn && link && <><label>공유 링크<input readOnly value={link} onFocus={e => e.target.select()}/></label><button disabled={busy} onClick={async () => {
       setBusy(true);
       try {
         if (!navigator.clipboard) { setMessage('이 브라우저는 링크 자동 복사를 지원하지 않아요.'); return; }
@@ -51,6 +54,6 @@ export default function ShareTrip({ stops }: { stops: Place[] }) {
       } catch { setMessage('링크 복사 또는 공유 저장을 완료하지 못했어요. 다시 시도해주세요.'); }
       finally { setBusy(false); }
     }}>링크 복사하기</button></>}
-    {retryId && <button disabled={busy} onClick={async () => { setBusy(true); try { await reward(retryId); } catch { setMessage('공유 결과를 저장하지 못했어요. 다시 시도해주세요.'); } finally { setBusy(false); } }}>공유 결과 저장 다시 시도</button>}
+    {loggedIn && retryId && <button disabled={busy} onClick={async () => { setBusy(true); try { await reward(retryId); } catch { setMessage('공유 결과를 저장하지 못했어요. 다시 시도해주세요.'); } finally { setBusy(false); } }}>공유 결과 저장 다시 시도</button>}
   </div>;
 }
