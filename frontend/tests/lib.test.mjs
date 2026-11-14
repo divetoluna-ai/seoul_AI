@@ -60,3 +60,11 @@ test('merged photos credit the API while keeping CSV data attribution', () => {
   assert.equal(photoCredit({ source: 'csv', image: '' }), '');
   assert.equal(photoCredit({ source: 'xlsx', image: 'https://example.com/photo.jpg' }), '');
 });
+
+test('allows only the exact local cached-photo route', () => {
+  const path = '/api/places/photos/' + 'a'.repeat(64);
+  assert.equal(safeImage(path), path);
+  for (const invalid of [path + '?url=https://evil.test', path + '/extra', '/api/places/photos/../secret', '/api/places/photos/abc']) {
+    assert.equal(safeImage(invalid), '/images/placeholder.svg');
+  }
+});

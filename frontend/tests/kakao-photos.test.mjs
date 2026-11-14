@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { matchKakaoPlace, searchKakaoPlace, createPhotoCollector } from '../src/kakao-photos.ts';
+import { matchKakaoPlace, searchKakaoPlace, createPhotoCollector, collectPhotoPage } from '../src/kakao-photos.ts';
 import { photoCredit, photoPage, sourceLabel } from '../src/lib.ts';
 
 const place = { id: 'csv-01234567890123456789', name: '테스트 카페', address: '서울특별시 종로구 인사동길 11', longitude: '126.986787', latitude: '37.57182943', image: '', source: 'xlsx' };
@@ -36,6 +36,7 @@ test('registry search uses the map province name and omits building details', as
 test('deduplicates photo requests, preserves source data, and caches failures', async () => {
   let lookups = 0, requests = 0;
   const collect = createPhotoCollector(async () => { lookups++; return candidate; }, async (url, options) => {
+    if (url.endsWith('/photo')) return { ok: true, json: async () => ({ status: 'search-required', place }) };
     requests++;
     assert.equal(url, `/api/places/${place.id}/kakao-photo`);
     assert.equal(JSON.parse(options.body).id, candidate.id);
@@ -60,7 +61,8 @@ test('serializes network collection and never replaces an existing photo', async
   });
   await Promise.all([collect(place), collect({ ...place, id: 'csv-22222222222222222222' })]);
   assert.equal(maximum, 1);
-  assert.equal(await collect(photo), photo);
+  const official = { ...photo, imageSource: 'tourapi' };
+  assert.equal(await collect(official), official);
 });
 test('credits Kakao separately from the dataset and links only to a validated place page', () => {
   assert.equal(sourceLabel(photo), '반려동물 동반가능 업소현황');
@@ -68,4 +70,107 @@ test('credits Kakao separately from the dataset and links only to a validated pl
   assert.equal(photoPage(photo), photo.imagePage);
   assert.equal(photoPage({ ...photo, imagePage: 'javascript:alert(1)' }), undefined);
   assert.equal(photoPage({ ...photo, imagePage: 'https://place.map.kakao.com.evil.test/123' }), undefined);
+});
+
+
+test('checks official photos on the server before using the browser SDK', async () => {
+  let searches = 0;
+  const official = { ...photo, imageSource: 'tourapi', image: 'https://example.com/official.jpg' };
+  const collect = createPhotoCollector(async () => { searches++; return candidate; }, async url => {
+    assert.equal(url, `/api/places/${place.id}/photo`);
+    return { ok: true, json: async () => ({ status: 'available', place: official }) };
+  });
+  assert.equal((await collect(place)).imageSource, 'tourapi');
+  assert.equal(searches, 0);
+});
+
+test('disabled or unmatched server results never trigger an SDK crawl', async () => {
+  for (const status of ['disabled', 'unmatched', 'unavailable']) {
+    const collect = createPhotoCollector(async () => { assert.fail('Unexpected SDK lookup'); }, async () => ({
+      ok: true, json: async () => ({ status, place }),
+    }));
+    assert.equal((await collect(place)).image, '');
+  }
+});
+
+test('a page crawls at most nine places in sequence and skips existing photos', async () => {
+  const places = Array.from({ length: 20 }, (_, i) => ({ ...place, id: String(i) }));
+  places[1] = { ...places[1], image: 'https://example.com/official.jpg' };
+  const calls = [], updates = [];
+  let active = 0;
+  await collectPhotoPage(places, async p => {
+    assert.equal(active++, 0);
+    calls.push(p.id);
+    await Promise.resolve(); active--;
+    return { ...p, image: photo.image };
+  }, p => updates.push(p.id), new AbortController().signal);
+  assert.deepEqual(calls, ['0', '2', '3', '4', '5', '6', '7', '8']);
+  assert.deepEqual(updates, calls);
+});
+
+test('changing pages cancels remaining work and ignores the previous page response', async () => {
+  const controller = new AbortController();
+  let release;
+  const calls = [], updates = [];
+  const pending = collectPhotoPage([place, { ...place, id: 'second' }], async p => {
+    calls.push(p.id);
+    await new Promise(resolve => { release = resolve; });
+    return { ...p, image: photo.image };
+  }, p => updates.push(p), controller.signal);
+  controller.abort(); release(); await pending;
+  assert.deepEqual(calls, [place.id]); assert.deepEqual(updates, []);
+});
+
+test('aborting an SDK lookup prevents a page fetch and does not poison retries', async () => {
+  const controller = new AbortController();
+  let release, searches = 0, crawls = 0;
+  const collect = createPhotoCollector(async () => {
+    searches++;
+    if (searches === 1) await new Promise(resolve => { release = resolve; });
+    return candidate;
+  }, async url => {
+    if (url.endsWith('/photo')) return { ok: true, json: async () => ({ status: 'search-required', place }) };
+    crawls++; return { ok: true, json: async () => ({ status: 'collected', place: photo }) };
+  });
+  const pending = collect(place, controller.signal);
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  controller.abort(); release(); await pending;
+  assert.equal(crawls, 0);
+  assert.equal((await collect(place)).image, photo.image);
+  assert.equal(crawls, 1);
+});
+
+test('queued old-page requests are skipped, and a failed place does not stop the batch', async () => {
+  const controller = new AbortController();
+  let release;
+  const urls = [];
+  const collect = createPhotoCollector(async () => null, async url => {
+    urls.push(url);
+    if (urls.length === 1) await new Promise(resolve => { release = resolve; });
+    return { ok: false };
+  });
+  const first = collect(place, controller.signal);
+  const old = collect({ ...place, id: 'old' }, controller.signal);
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  controller.abort();
+  const next = collect({ ...place, id: 'new' });
+  release(); await Promise.all([first, old, next]);
+  assert.deepEqual(urls, [`/api/places/${place.id}/photo`, '/api/places/new/photo']);
+  const updates = [];
+  await collectPhotoPage([place, { ...place, id: 'next' }], async p => {
+    if (p.id === place.id) throw Error('offline');
+    return { ...p, image: photo.image };
+  }, p => updates.push(p.id), new AbortController().signal);
+  assert.deepEqual(updates, ['next']);
+});
+
+test('migrates saved external Kakao photos to the server file without a new SDK search', async () => {
+  const migrated = { ...photo, image: '/api/places/photos/' + 'b'.repeat(64) };
+  const collect = createPhotoCollector(async () => { assert.fail('Unexpected search'); }, async () => ({
+    ok: true, json: async () => ({ status: 'available', place: migrated }),
+  }));
+  const updates = [];
+  await collectPhotoPage([photo], collect, p => updates.push(p), new AbortController().signal);
+  assert.equal(updates[0].image, migrated.image);
+  assert.equal(await collect(migrated), migrated);
 });

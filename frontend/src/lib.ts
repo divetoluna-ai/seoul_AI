@@ -40,7 +40,7 @@ export async function api<T>(path: string, signal?: AbortSignal): Promise<T> {
   return response.json();
 }
 export function safeImage(url: string) {
-  return /^https?:\/\//i.test(url) || /^\/images\/place-[1-6]\.jpg$/.test(url) ? url : '/images/placeholder.svg';
+  return /^https?:\/\//i.test(url) || (/^\/images\/place-[1-6]\.jpg$/.test(url) || /^\/api\/places\/photos\/[a-f0-9]{64}$/.test(url)) ? url : '/images/placeholder.svg';
 }
 export function photosFirst(places: Place[]) {
   const missing = (p: Place) => safeImage(p.image) === '/images/placeholder.svg';
