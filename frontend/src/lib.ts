@@ -9,6 +9,8 @@ export const categoryLabels: Record<string, string> = {
   all: '전체', attraction: '관광지', culture: '문화시설', festival: '축제·공연·행사',
   course: '여행코스', leisure: '레포츠', stay: '숙박', shopping: '쇼핑', restaurant: '음식점·카페', care: '미용·돌봄',
 };
+// Keep categories with more than 10 places in Seoul, plus accommodation.
+export const browseCategories = ['all', 'attraction', 'stay', 'shopping', 'restaurant', 'care'] as const;
 export function sourceLabel(place: Place) {
   if (place.source === 'supplemental') return '추가 반려동물 동반 CSV';
   if (place.source === 'xlsx') return '반려동물 동반가능 업소현황';

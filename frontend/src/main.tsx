@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowDown, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Dog, ExternalLink, Heart, Info, Leaf, LoaderCircle, MapPin, PawPrint, RotateCcw, Search, ShieldCheck, SlidersHorizontal, X, Mountain, Landmark, PartyPopper, Route, Bike, BedDouble, ShoppingBag, Scissors } from 'lucide-react';
-import { api, loadSaved, sourceLabel, photosFirst, photoCredit, photoPage, updatedDate, categoryLabels, categoryLabel, type Detail, type Place, type PlacesResponse, type Region } from './lib';
+import { ArrowDown, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Dog, ExternalLink, Heart, Info, Leaf, LoaderCircle, MapPin, PawPrint, RotateCcw, Search, ShieldCheck, SlidersHorizontal, X, Mountain, Route, BedDouble, ShoppingBag, Scissors } from 'lucide-react';
+import { api, loadSaved, sourceLabel, photosFirst, photoCredit, photoPage, updatedDate, browseCategories, categoryLabels, categoryLabel, type Detail, type Place, type PlacesResponse, type Region } from './lib';
 import './styles.css';
 import AccountMenu from './AccountMenu';
 import type { DogProfile } from './dog-profiles';
@@ -16,7 +16,7 @@ import PlaceImage from './PlaceImage';
 import AvatarStudio from './AvatarStudio';
 import { communityApi } from './community-api';
 
-const categoryIcons = { all: PawPrint, attraction: Mountain, culture: Landmark, festival: PartyPopper, course: Route, leisure: Bike, stay: BedDouble, shopping: ShoppingBag, restaurant: Coffee, care: Scissors };
+const categoryIcons = { all: PawPrint, attraction: Mountain, stay: BedDouble, shopping: ShoppingBag, restaurant: Coffee, care: Scissors };
 function CategoryIcon({ category }: { category: string }) {
   const Icon = categoryIcons[category as keyof typeof categoryIcons] || MapPin;
   return <Icon size={16}/>;
@@ -31,7 +31,7 @@ function App() {
   useEffect(() => { const sync = () => setCommunity(isCommunityHash(window.location.hash)); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, []);
   const [shareRequest, setShareRequest] = useState(0);
   const [regions, setRegions] = useState<Region[]>([]);
-  const [region, setRegion] = useState('11');
+  const [region, setRegion] = useState('50');
   const [district, setDistrict] = useState('');
   const [districts, setDistricts] = useState<Region[]>([]);
   const [category, setCategory] = useState('all');
@@ -216,7 +216,7 @@ function App() {
           {!savedView && <aside className={`filters ${filtersOpen ? 'open' : ''}`}><div className="filter-title"><span><SlidersHorizontal size={17}/> 맞춤 탐색</span><button onClick={reset} aria-label="검색 필터 초기화"><RotateCcw size={15}/></button></div>
             <label className="field-label" htmlFor="region"><MapPin size={15}/> 어느 지역으로 갈까요?</label><div className="select-wrap"><select id="region" value={region} onChange={e => chooseRegion(e.target.value)}>{regions.length ? regions.map(r => <option key={r.code} value={r.code}>{r.name}</option>) : <option value="11">서울</option>}</select><ChevronDown size={15}/></div>
             <div className="select-wrap district-select"><select aria-label="시군구 선택" value={district} onChange={e => { setDistrict(e.target.value); setPage(1); }}><option value="">시 · 군 · 구 전체</option>{districts.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}</select><ChevronDown size={15}/></div>{districtError && <p className="field-help">{districtError}</p>}
-            <div className="filter-divider"/><span className="field-label"><Coffee size={15}/> 어떤 공간을 찾나요?</span><div className="category-options">{Object.entries(categoryLabels).map(([key, label]) => <button key={key} aria-pressed={category === key} className={category === key ? 'category-option chosen' : 'category-option'} onClick={() => { setCategory(key); setPage(1); }}><span><CategoryIcon category={key}/> {label === '전체' ? '모든 공간' : label}</span><span className="radio-mark">{category === key && <span/>}</span></button>)}</div>
+            <div className="filter-divider"/><span className="field-label"><Coffee size={15}/> 어떤 공간을 찾나요?</span><div className="category-options">{browseCategories.map(key => <button key={key} aria-pressed={category === key} className={category === key ? 'category-option chosen' : 'category-option'} onClick={() => { setCategory(key); setPage(1); }}><span><CategoryIcon category={key}/> {key === 'all' ? '모든 공간' : categoryLabels[key]}</span><span className="radio-mark">{category === key && <span/>}</span></button>)}</div>
             <div className="filter-divider"/><div className="guide-card"><span className="guide-icon"><Dog size={27}/></span><h3>처음 함께 가는 곳이라면?</h3><p>방문 전 동반 조건을 확인하면<br/>더 편안한 외출이 될 거예요.</p><button onClick={() => setGuide(true)}>동반 가이드 살펴보기 <ArrowRight size={14}/></button></div>
           </aside>}
           <div className="results"><form className="search-bar" onSubmit={e => { e.preventDefault(); setKeyword(draft.trim()); setPage(1); }}><Search size={19}/><input aria-label="장소 이름 또는 동네 검색" placeholder="어떤 곳을 찾고 있나요? 장소 이름을 검색해보세요" value={draft} maxLength={60} onChange={e => setDraft(e.target.value)} disabled={savedView}/>{draft && <button className="clear-search" type="button" aria-label="검색어 지우기" onClick={() => { setDraft(''); setKeyword(''); setPage(1); }}><X size={15}/></button>}<button className="search-submit" disabled={savedView}>검색</button></form>
