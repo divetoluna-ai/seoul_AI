@@ -238,7 +238,7 @@ public class CommunityService {
         projected.stream().filter(d -> d.userId.equals(user.id) && d.millis > 0).forEach(d -> history.add(new PointHistory("nfc", d.date, nfcPoints(d.millis), LocalDate.parse(d.date).atStartOfDay(SEOUL).toInstant().toString())));
         boolean active = session != null && now < session.lastSeenAt + NFC_LEASE_MS;
         return new PointsView(total(user, projected), history.stream().sorted(Comparator.comparing(PointHistory::createdAt).reversed()).limit(20).toList(),
-            new NfcView(active, session == null ? user.petName : session.petName, "SIM-" + user.id.substring(0, 8), date, today, nfcPoints(today), now,
+            new NfcView(active, user.petName, "SIM-" + user.id.substring(0, 8), date, today, nfcPoints(today), now,
                 active ? session.lastSeenAt + NFC_LEASE_MS : now, nextMidnight(now), active ? session.startedAt : 0));
     }
     public synchronized PointsView nfcProximity(String token, boolean enabled) {

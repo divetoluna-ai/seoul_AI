@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { UserRound, X } from 'lucide-react';
 import kakaoLoginButton from './kakao-login.svg';
 import './account.css';
+import { useMemberProfile } from './MemberProfile';
+import type { MemberUser } from './member-profile';
 
 type Session = {
   enabled: boolean;
@@ -17,8 +19,9 @@ const callbackErrors: Record<string, string> = {
   unavailable: '아직 카카오 로그인 설정이 완료되지 않았어요.',
 };
 
-export default function AccountMenu({ onSessionChange }: { onSessionChange: (loggedIn: boolean) => void }) {
+export default function AccountMenu({ onSessionChange }: { onSessionChange: (loggedIn: boolean, user?: MemberUser | null) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const { profile, openProfile } = useMemberProfile();
   const [session, setSession] = useState<Session | null>(null);
   const [sessionError, setSessionError] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -43,7 +46,7 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
         if (!response.ok) throw new Error();
         return response.json() as Promise<Session>;
       })
-      .then(value => { setSession(value); onSessionChange(!!value.user); })
+      .then(value => { setSession(value); onSessionChange(!!value.user, value.user); })
       .catch(() => {
         if (!controller.signal.aborted) { setSession(null); onSessionChange(false); setSessionError('로그인 정보를 불러오지 못했어요.'); }
       });
@@ -89,7 +92,7 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
   return <>
     <button type="button" className="account-trigger" onClick={showAccount} aria-haspopup="dialog">
       <UserRound size={17} aria-hidden="true" />
-      <span>{user?.nickname ?? '로그인'}</span>
+      <span>{profile?.nickname || user?.nickname || '로그인'}</span>
     </button>
     <dialog ref={dialog} className="account-dialog" aria-labelledby="account-title">
       <button type="button" className="dialog-close" aria-label="닫기" onClick={() => dialog.current?.close()}>
@@ -98,7 +101,7 @@ export default function AccountMenu({ onSessionChange }: { onSessionChange: (log
       <h2 id="account-title">{user ? '내 계정' : '로그인 · 회원가입'}</h2>
       {feedback && <p className="account-feedback" role="alert">{feedback}</p>}
       {user ? <>
-        <p>{user.nickname}님, 카카오 계정으로 로그인했어요.</p>
+        <p>{profile?.nickname || user.nickname}님, 카카오 계정으로 로그인했어요.</p><button type="button" className="primary-button" onClick={() => { dialog.current?.close(); openProfile(); }}>프로필 설정</button>
         <button type="button" className="secondary-button" disabled={signingOut} onClick={logout}>
           {signingOut ? '로그아웃 중…' : '로그아웃'}
         </button>

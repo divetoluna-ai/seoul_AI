@@ -89,6 +89,15 @@
   height: auto;
 }
 
+.member-profile-dialog{width:min(480px,calc(100% - 32px))}
+.member-profile-icon{display:inline-flex;padding:12px;background:#edf2e9;border-radius:15px;color:var(--green);margin-bottom:16px}
+.member-profile-form{margin-top:22px}.member-profile-form label{display:grid;gap:8px;font-size:13px;font-weight:600;margin-bottom:18px}
+.member-profile-form input{width:100%;min-width:0;border:1px solid #d8e1d3;border-radius:8px;padding:12px;background:white;font-size:14px}
+.member-profile-form fieldset{border:1px solid #e0e8da;border-radius:10px;margin:20px 0;padding:18px}.member-profile-form legend{font-size:13px;font-weight:700;padding:0 7px;color:var(--green)}
+.member-profile-form fieldset label{margin-bottom:10px}.member-profile-form small{font-size:11px;line-height:1.7;color:#7c8775}
+.member-profile-actions{display:flex;align-items:center;gap:20px;font-size:13px;margin-top:22px}
+.account-dialog .primary-button{margin-top:16px}.member-profile-actions .primary-button{margin-top:0}
+
 @media (max-width: 620px) {
   .header-actions { gap: 5px; }
   .account-trigger { padding: 8px; font-size: 11px; gap: 4px; max-width: 100px; }

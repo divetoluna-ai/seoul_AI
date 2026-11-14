@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Place } from './lib';
-import { communityApi, type Profile } from './community-api';
+import { communityApi } from './community-api';
 import { deliverTripLink } from './share';
+import { useMemberProfile } from './MemberProfile';
+import { profileComplete } from './member-profile';
 
 export default function ShareTrip({ stops, loggedIn }: { stops: Place[]; loggedIn: boolean }) {
+  const { profile, openProfile } = useMemberProfile();
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const [message, setMessage] = useState('');
@@ -20,13 +23,13 @@ export default function ShareTrip({ stops, loggedIn }: { stops: Place[]; loggedI
   }
   async function share() {
     if (!loggedIn) { setMessage('로그인 후 공유할 수 있어요.'); return; }
+    if (!profileComplete(profile)) { setLoginRequired(true); openProfile(); return; }
     if (pending.current) return;
     pending.current = true; setBusy(true); setMessage(''); setLoginRequired(false); setLink(''); setRetryId('');
     let delivered = false;
     try {
       // Resolve the session before preparing a link; anonymous users cannot earn points.
-      const { profile } = await communityApi<{ profile: Profile | null }>('/profile');
-      if (!profile) { setLoginRequired(true); return; }
+
       const result = await communityApi<{ id: string }>('/shares', 'POST', {
         stops: stops.map(({ id, name, address, category, latitude, longitude }) => ({ id, name, address, category, latitude, longitude })),
       });
@@ -44,7 +47,7 @@ export default function ShareTrip({ stops, loggedIn }: { stops: Place[]; loggedI
     <button className="trip-add" disabled={!loggedIn || busy || !stops.length} onClick={() => void share()}>{busy ? '공유 준비 중…' : '지도·코스 공유하기'}</button>
     {!loggedIn && <p>지도·코스 공유는 로그인 후 이용할 수 있어요.</p>}
     <small>함께 가고 싶은 지도·코스를 공유해보세요. 현재 위치는 공유하지 않아요.</small>
-    {loginRequired && <p role="status"><a href="#community">이웃 프로필을 먼저 만들어주세요.</a> 프로필을 만든 뒤 돌아와 공유할 수 있어요.</p>}
+    {loginRequired && !profileComplete(profile) && <p role="status"><button onClick={openProfile}>프로필 설정</button>에서 닉네임과 반려견을 등록해주세요.</p>}
     {message && <p role="status">{message}</p>}
     {loggedIn && link && <><label>공유 링크<input readOnly value={link} onFocus={e => e.target.select()}/></label><button disabled={busy} onClick={async () => {
       setBusy(true);

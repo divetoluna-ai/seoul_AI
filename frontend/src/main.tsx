@@ -4,6 +4,8 @@ import { ArrowDown, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, C
 import { api, loadSaved, sourceLabel, photosFirst, photoCredit, photoPage, updatedDate, categoryLabels, categoryLabel, type Detail, type Place, type PlacesResponse, type Region } from './lib';
 import './styles.css';
 import AccountMenu from './AccountMenu';
+import MemberProfileProvider from './MemberProfile';
+import type { MemberUser } from './member-profile';
 import Community from './Community';
 import PointShop from './PointShop';
 import { isCommunityHash } from './community-api';
@@ -21,8 +23,9 @@ function CategoryIcon({ category }: { category: string }) {
 }
 function App() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [memberUser, setMemberUser] = useState<MemberUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const onSessionChange = useCallback((value: boolean) => { setLoggedIn(value); setAuthReady(true); }, []);
+  const onSessionChange = useCallback((value: boolean, user: MemberUser | null = null) => { setLoggedIn(value); setAuthReady(true); setMemberUser(current => current?.id === user?.id && current?.nickname === user?.nickname ? current : user); }, []);
   const [shop, setShop] = useState(window.location.hash === '#shop');
   const showShop = shop && loggedIn;
   useEffect(() => { if (shop && authReady && !loggedIn) { setShop(false); window.location.hash = 'explore'; } }, [shop, authReady, loggedIn]);
@@ -187,7 +190,7 @@ function App() {
   const places = sort === 'photo' ? photosFirst(availablePlaces) : availablePlaces;
   const total = savedView ? saved.length : result?.total || 0;
   const pages = Math.ceil((result?.total || 0) / (result?.pageSize || 9));
-  return <>
+  return <MemberProfileProvider key={memberUser?.id || 'guest'} user={memberUser}>
     {(sharedStops || sharedError) && <section className="container shared-trip-banner" aria-label="공유받은 여행 코스">
       {sharedError ? <p role="alert">{sharedError}</p> : sharedStops && <><strong>공유받은 여행 코스 · {sharedStops.length}곳</strong><p>{sharedStops.map(p => p.name).join(' → ')}</p><button className="primary-button" onClick={() => { tripGeneration.current++; setTripStops(sharedStops); setSharedStops(null); window.location.hash = ''; requestAnimationFrame(showTrip); }}>이 코스를 내 지도에서 보기</button></>}
     </section>}
@@ -234,6 +237,6 @@ function App() {
     {toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
     <dialog ref={detailDialog} onCancel={() => setSelected(null)} onClick={e => { if (e.target === e.currentTarget) setSelected(null); }} onClose={() => setSelected(null)} className="detail-dialog"><button className="dialog-close" onClick={() => setSelected(null)} aria-label="상세 닫기"><X size={20}/></button>{selected && <><PlaceImage key={selected.id} className="detail-image" place={detail?.place || selected} onPhoto={onPhoto}/><div className="detail-content"><span className="card-category">{categoryLabel(selected.category)}</span><h2>{selected.name}</h2><p className="source-attribution">{sourceLabel(detail?.place || selected)} · 자료 기준 {updatedDate(detail?.place || selected)}{photoCredit(detail?.place || selected) && <><br/>{photoPage(detail?.place || selected) ? <a href={photoPage(detail?.place || selected)} target="_blank" rel="noreferrer">{photoCredit(detail?.place || selected)} · 원문 보기 ↗</a> : photoCredit(detail?.place || selected)}</>}</p><p className="detail-address"><MapPin size={15}/>{selected.address}</p><PlaceLocation key={selected.id} place={detail?.place || selected}/>{detailError ? <div className="detail-error" role="alert"><p>{detailError}</p><button onClick={() => setRetry(n => n + 1)}>다시 시도</button></div> : !detail ? <p className="detail-loading"><LoaderCircle size={18} className="spin"/> 동반 정보를 확인하고 있어요</p> : <>{detail.mode === 'demo' && <p className="detail-demo">가상의 예시 장소입니다. 실제 방문 정보가 아닙니다.</p>}<p className="overview">{detail.overview || '장소 소개가 아직 제공되지 않았어요.'}</p><div className="detail-info">{[[selected.category === 'stay' && selected.source !== 'csv' ? '체크인' : '이용시간', detail.hours], ['휴무일', detail.restDay], ['주차', detail.parking], ['동반 가능 동물', detail.animals], ['동반 시 필요사항', detail.requirements], ['동반 시설', detail.facilities], ['기타 동반 정보', detail.other]].map(([label, value]) => <div key={label}><strong>{label}</strong><span>{value || '정보 미제공 · 방문 전 확인해주세요'}</span></div>)}</div></>}<button className="trip-detail-action" disabled={resolvingTrip.includes(selected.id) || selected.id.startsWith('demo-')} aria-busy={resolvingTrip.includes(selected.id)} onClick={async () => { if (tripStops.some(p => p.id === selected.id) || await toggleTrip(detail?.place || selected)) { setSelected(null); requestAnimationFrame(showTrip); } }}><Route size={17}/>{resolvingTrip.includes(selected.id) ? '위치 확인 중…' : tripStops.some(p => p.id === selected.id) ? '여행 코스에서 경로 보기' : '코스에 담고 경로 보기'}</button><div className="detail-actions"><button className="primary-button" onClick={() => toggleSave(detail?.place || selected)}><Heart size={17} fill={saved.some(s => s.id === selected.id) ? 'currentColor' : 'none'}/>{saved.some(s => s.id === selected.id) ? '저장한 장소' : '장소 저장'}</button></div>{selected.phone && <a className="phone-link" href={`tel:${selected.phone.replace(/[^0-9+]/g, '')}`}>시설 문의 · {selected.phone}</a>}<p className="detail-disclaimer">실내 입장·체중 제한 등 세부 조건은 시설에 꼭 확인해주세요.</p></div></>}</dialog>
     <dialog ref={guideDialog} onCancel={() => setGuide(false)} onClose={() => setGuide(false)} onClick={e => { if (e.target === e.currentTarget) setGuide(false); }} className="guide-dialog"><button className="dialog-close" onClick={() => setGuide(false)} aria-label="가이드 닫기"><X size={20}/></button><div className="guide-dialog-icon"><PawPrint size={31}/></div><div className="eyebrow">HAPPY TOGETHER</div><h2>우리의 외출이<br/>모두에게 좋은 기억이 되도록.</h2><p>출발 전에, 이 네 가지만 함께 확인해요.</p><ol>{[['방문 전 한 번 더 확인해요', '동반 가능 구역, 반려견 크기·마릿수 제한과 이동 가방 필요 여부를 시설에 문의해주세요.'], ['목줄과 배변봉투를 챙겨요', '공용 공간에서는 목줄을 착용하고, 배변은 보호자가 바로 정리해주세요.'], ['아이의 컨디션을 먼저 살펴요', '낯선 공간이 불편하지 않도록 물과 익숙한 담요를 챙기고, 충분히 쉬어주세요.'], ['다른 손님도 함께 배려해요', '시설의 안내를 따르고, 다른 반려견과 인사할 때는 보호자의 동의를 먼저 구해주세요.']].map(([title, text], i) => <li key={title}><span>{String(i + 1).padStart(2, '0')}</span><div><h3>{title}</h3><p>{text}</p></div></li>)}</ol><button className="primary-button" onClick={() => setGuide(false)}>준비됐어요, 함께 가개 <PawPrint size={17}/></button></dialog>
-  </>;
+  </MemberProfileProvider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
