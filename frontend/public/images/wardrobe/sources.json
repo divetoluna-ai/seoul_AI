@@ -1,0 +1,58 @@
+{
+  "source": "어도러블독",
+  "catalog": "https://adorable-dog.com/product/list.html?cate_no=44",
+  "accessed": "2026-11-14",
+  "usage": "상품 선택을 위한 참고 썸네일. 3D 의상은 상품 특징을 참고한 스타일 표현.",
+  "assets": [
+    {
+      "id": "12",
+      "url": "https://adorable-dog.com/product/셔링-숄더-골지티코랄/12/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20250402/a0e16ccecdc2e9843261b64549f7ca01.jpg"
+    },
+    {
+      "id": "19",
+      "url": "https://adorable-dog.com/product/스트라이프-리본-나시-탑핑크/19/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20260204/315aa6fc507450a38623911d90a536fd.png"
+    },
+    {
+      "id": "30",
+      "url": "https://adorable-dog.com/product/7차피치-기모-터틀넥브라운/30/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20250403/58afbf5351a078889282cad82c3cfec3.png"
+    },
+    {
+      "id": "50",
+      "url": "https://adorable-dog.com/product/피그먼트-모네-나시네이비/50/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20250912/801bcb5d570793dfe8cb7ccb5e1146d8.png"
+    },
+    {
+      "id": "48",
+      "url": "https://adorable-dog.com/product/피그먼트-모네-나시크림/48/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20260918/7c23044fe1575814ac47ce33940467ce.png"
+    },
+    {
+      "id": "53",
+      "url": "https://adorable-dog.com/product/어도러블-크롭-맨투맨그레이/53/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20250906/d7907737012aec1660e49eedad96c6bd.png"
+    },
+    {
+      "id": "52",
+      "url": "https://adorable-dog.com/product/2차어도러블-크롭-맨투맨블랙/52/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20260918/877308ca7489e8a51de4d7a0353090ea.png"
+    },
+    {
+      "id": "63",
+      "url": "https://adorable-dog.com/product/모나-슬리브리스/63/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20260601/5c79e875f670bec2dc722b17cd5d422a.png"
+    },
+    {
+      "id": "71",
+      "url": "https://adorable-dog.com/product/스티치-리본-스웻맨투맨/71/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20261006/56e28157841a2571b19d023ce6c4e027.png"
+    },
+    {
+      "id": "70",
+      "url": "https://adorable-dog.com/product/스티치-링링-탑/70/category/44/display/1/",
+      "image": "https://ecimg.cafe24img.com/pg1660b89898726067/adorabledog0612/web/product/big/20261006/54391a9ce8ff243125da74bbf1c197d1.png"
+    }
+  ]
+}

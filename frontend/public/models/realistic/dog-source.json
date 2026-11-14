@@ -1,0 +1,51 @@
+{
+ "slug": "dog",
+ "triangles": 329190,
+ "texture_px": 4096,
+ "triangles_light": 164595,
+ "texture_px_light": 1024,
+ "files": {
+  "glb": {
+   "name": "dog.glb",
+   "bytes": 15998932
+  },
+  "blend": {
+   "name": "dog.blend",
+   "bytes": 18607731
+  },
+  "fbx": {
+   "name": "dog.fbx",
+   "bytes": 24511788
+  },
+  "obj": {
+   "name": "dog-obj.zip",
+   "bytes": 13098348
+  },
+  "usdz": {
+   "name": "dog.usdz",
+   "bytes": 22834338
+  },
+  "glb_light": {
+   "name": "dog-light.glb",
+   "bytes": 5306844
+  },
+  "fbx_light": {
+   "name": "dog-light.fbx",
+   "bytes": 10306876
+  }
+ },
+ "extras": {
+  "license": "CC0-1.0",
+  "source": "grab3d.com",
+  "dimensions_m": "0.529 x 0.950 x 0.745",
+  "triangles": 329190,
+  "variant": "download",
+  "generator": "Created by grab3d",
+  "created": "2026-09-26"
+ },
+ "origin": {
+  "method": "ai-assisted",
+  "detail": "Base mesh and textures generated with an AI image-to-3D tool (Meshy), then cleaned up, scaled, textured and checked in Blender.",
+  "ai_content": true
+ }
+}

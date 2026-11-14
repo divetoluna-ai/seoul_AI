@@ -1,0 +1,5 @@
+maltese_hair_practice_2 by erik_sk
+Source: https://sketchfab.com/models/fcb869fb1464475c86933cf471502a54
+License: CC BY 4.0 https://creativecommons.org/licenses/by/4.0/
+Public GLB redistributed by AllenAI Objaverse: https://huggingface.co/datasets/allenai/objaverse
+Modifications: changed pink hair material to warm white; size/orientation normalization; custom skeleton, skin weights, animation and clothing.
