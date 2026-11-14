@@ -48,6 +48,88 @@ class CommunityIntegrationTests {
     Map<String, Object> post(String category, String title) {
         return new HashMap<>(Map.of("category", category, "title", title, "content", "이웃과 함께 나누는 유용한 이야기입니다.", "region", "11", "district", "강남구"));
     }
+    @Test void pointsAreSessionScopedPersistentAndLikesCannotBeFarmed() throws Exception {
+        var owner = actor(); var neighbor = actor();
+        String id = ok(owner, "POST", "/posts", post("info", "포인트 테스트 정보")).path("item").path("post").path("id").asText();
+        assertEquals(401, call(null, "GET", "/points", null).statusCode());
+        assertEquals(401, call(null, "PUT", "/posts/" + id + "/like", Map.of("enabled", true)).statusCode());
+        assertEquals(401, call(null, "POST", "/posts/" + id + "/comments", Map.of("content", "댓글")).statusCode());
+        assertEquals(0, ok(neighbor, "GET", "/points", null).path("total").asLong());
+        ok(neighbor, "PUT", "/posts/" + id + "/like", Map.of("enabled", true));
+        ok(neighbor, "PUT", "/posts/" + id + "/like", Map.of("enabled", true));
+        ok(neighbor, "PUT", "/posts/" + id + "/like", Map.of("enabled", false));
+        ok(neighbor, "PUT", "/posts/" + id + "/like", Map.of("enabled", true));
+        assertEquals(1, ok(neighbor, "GET", "/points", null).path("total").asLong());
+        assertEquals(400, call(neighbor, "POST", "/posts/" + id + "/comments", Map.of("content", "  ")).statusCode());
+        var comment = ok(neighbor, "POST", "/posts/" + id + "/comments", Map.of("content", "도움이 됐어요"));
+        assertEquals(6, ok(neighbor, "GET", "/points", null).path("total").asLong());
+        String commentId = comment.path("comments").get(0).path("comment").path("id").asText();
+        ok(neighbor, "DELETE", "/posts/" + id + "/comments/" + commentId, null);
+        ok(neighbor, "POST", "/posts/" + id + "/comments", Map.of("content", "다음에도 함께해요"));
+        assertEquals(11, ok(neighbor, "GET", "/points", null).path("total").asLong());
+        assertEquals(0, ok(owner, "GET", "/points", null).path("total").asLong());
+        ok(neighbor, "POST", "/profile", Map.of("nickname", neighbor.nickname, "petName", "수정", "region", "11", "district", ""));
+        var reloaded = new CommunityService(mapper, catalog, store.toString());
+        assertEquals(11, reloaded.points(neighbor.cookie.substring(neighbor.cookie.indexOf('=') + 1)).total());
+    }
+    @Test void nfcSimulationEndpointsRequireSessionAndPersistToggle() throws Exception {
+        var actor = actor();
+        assertEquals(401, call(null, "PUT", "/nfc/proximity", Map.of("enabled", true)).statusCode());
+        assertEquals(401, call(null, "POST", "/nfc/heartbeat", null).statusCode());
+        assertEquals(403, call("PUT", "/nfc/proximity", Map.of("enabled", true), actor.cookie, false).statusCode());
+        var started = ok(actor, "PUT", "/nfc/proximity", Map.of("enabled", true));
+        assertTrue(started.path("nfc").path("active").asBoolean());
+        assertEquals("보리", started.path("nfc").path("petName").asText());
+        assertTrue(ok(actor, "POST", "/nfc/heartbeat", null).path("nfc").path("active").asBoolean());
+        assertFalse(ok(actor, "PUT", "/nfc/proximity", Map.of("enabled", false)).path("nfc").path("active").asBoolean());
+        assertFalse(ok(actor, "GET", "/points", null).path("nfc").path("active").asBoolean());
+    }
+    @Test void sharesRewardOnlyTheirOwnerOnceAndArePubliclyReadable() throws Exception {
+        var owner = actor(); var stranger = actor();
+        var stop = Map.of("id", "csv-test-place", "name", "공원", "address", "서울", "category", "attraction", "latitude", "37.56", "longitude", "126.97");
+        var body = Map.of("stops", List.of(stop));
+        assertEquals(401, call(null, "POST", "/shares", body).statusCode());
+        assertEquals(400, call(owner, "POST", "/shares", Map.of("stops", List.of())).statusCode());
+        var invalid = new HashMap<>(stop); invalid.put("latitude", "NaN");
+        assertEquals(400, call(owner, "POST", "/shares", Map.of("stops", List.of(invalid))).statusCode());
+        String id = ok(owner, "POST", "/shares", body).path("id").asText();
+        assertEquals(0, ok(owner, "GET", "/points", null).path("total").asLong(), "Preparing a link is not a completed share");
+        var shared = ok(null, "GET", "/shares/" + id, null);
+        assertEquals("공원", shared.path("stops").get(0).path("name").asText());
+        assertFalse(shared.has("ownerId")); assertFalse(shared.has("fingerprint"));
+        assertEquals(401, call(null, "PUT", "/shares/" + id + "/complete", null).statusCode());
+        assertEquals(403, call(stranger, "PUT", "/shares/" + id + "/complete", null).statusCode());
+        assertEquals(10, ok(owner, "PUT", "/shares/" + id + "/complete", null).path("awarded").asInt());
+        assertEquals(0, ok(owner, "PUT", "/shares/" + id + "/complete", null).path("awarded").asInt());
+        var renamed = new HashMap<>(stop); renamed.put("name", "이름 변경");
+        assertEquals(id, ok(owner, "POST", "/shares", Map.of("stops", List.of(renamed))).path("id").asText());
+        assertEquals(10, ok(owner, "GET", "/points", null).path("total").asLong());
+        var reloaded = new CommunityService(mapper, catalog, store.toString());
+        String token = owner.cookie.substring(owner.cookie.indexOf('=') + 1);
+        assertEquals(10, reloaded.points(token).total()); assertEquals(0, reloaded.completeShare(token, id).awarded());
+    }
+    @Test void oldSnapshotsMigrateAndFailedWritesRollBackPointsWithTheirAction() throws Exception {
+        Path legacy = Files.createTempDirectory("community-legacy-").resolve("community.json");
+        Files.writeString(legacy, "{\"accounts\":[],\"posts\":[],\"comments\":[],\"conversations\":[],\"messages\":[]}");
+        var original = new CommunityService(mapper, catalog, legacy.toString());
+        var profile = original.saveProfile("old-token", new CommunityService.ProfileInput("기존이웃", "", "11", ""));
+        var input = new CommunityService.PostInput("info", "저장 실패 테스트", "저장 실패 시 되돌아갑니다.", "11", "", "", null, "", "", "", null);
+        String id = original.create("old-token", input).item().post().id();
+        var snapshot = mapper.readValue(Files.readString(legacy), CommunityService.Snapshot.class);
+        Files.writeString(legacy, mapper.writeValueAsString(Map.of("accounts", snapshot.accounts(), "posts", snapshot.posts(),
+            "comments", snapshot.comments(), "conversations", snapshot.conversations(), "messages", snapshot.messages())));
+        var service = new CommunityService(mapper, catalog, legacy.toString());
+        assertEquals(profile, service.me("old-token")); assertEquals(0, service.points("old-token").total());
+        String share = service.createShare("old-token", new CommunityService.ShareInput(List.of(
+            new CommunityService.SharedPlace("old-place", "공원", "서울", "attraction", "37.56", "126.97")))).id();
+        Files.delete(legacy); Files.createDirectory(legacy); Files.writeString(legacy.resolve("blocker"), "block replacement");
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.like("old-token", id, true));
+        assertEquals(0, service.points("old-token").total()); assertEquals(0, service.detail("old-token", id).item().likeCount());
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.comment("old-token", id, "댓글"));
+        assertEquals(0, service.points("old-token").total()); assertTrue(service.detail("old-token", id).comments().isEmpty());
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.completeShare("old-token", share));
+        assertEquals(0, service.points("old-token").total());
+    }
     @Test void sharedPostsOwnershipCommentsLikesAndPersistence() throws Exception {
         var owner = actor(); var neighbor = actor(); var body = post("info", "공유되는 산책 정보");
         assertEquals(401, call(null, "POST", "/posts", body).statusCode());

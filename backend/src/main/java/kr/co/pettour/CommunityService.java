@@ -1,6 +1,7 @@
 package kr.co.pettour;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -8,7 +9,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Instant;
+import java.time.*;
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -26,8 +27,30 @@ public class CommunityService {
     public record Comment(String id, String postId, String authorId, String content, String createdAt) {}
     public record Conversation(String id, String postId, String starterId, String ownerId, String createdAt) {}
     public record Message(String id, String conversationId, String authorId, String content, String createdAt) {}
+    public record PointEntry(String userId, String reason, String target, int amount, String createdAt) {}
+    public record PointHistory(String reason, String target, double amount, String createdAt) {}
+    public record NfcDay(String userId, String date, long millis) {}
+    public record NfcSession(String userId, String petName, long startedAt, long cursorAt, long lastSeenAt) {}
+    public record NfcView(boolean active, String petName, String tagId, String date, long millisToday,
+                          double pointsToday, long serverNow, long activeUntil, long resetAt, long sessionStartedAt) {}
+    public record PointsView(double total, List<PointHistory> history, NfcView nfc) {}
+    public record SharedPlace(String id, String name, String address, String category, String latitude, String longitude) {}
+    public record ShareInput(List<SharedPlace> stops) {}
+    public record SharedTrip(String id, String ownerId, String fingerprint, List<SharedPlace> stops) {}
+    public record SharedTripView(String id, List<SharedPlace> stops) {}
+    public record ShareReward(double total, int awarded) {}
     public record Snapshot(List<Account> accounts, List<Post> posts, List<Comment> comments,
-                           List<Conversation> conversations, List<Message> messages) {}
+                           List<Conversation> conversations, List<Message> messages,
+                           List<PointEntry> points, List<SharedTrip> shares,
+                           List<NfcDay> nfcDays, List<NfcSession> nfcSessions) {
+        public Snapshot {
+            // Older snapshots have no points or shared trips.
+            points = points == null ? new ArrayList<>() : points;
+            shares = shares == null ? new ArrayList<>() : shares;
+            nfcDays = nfcDays == null ? new ArrayList<>() : nfcDays;
+            nfcSessions = nfcSessions == null ? new ArrayList<>() : nfcSessions;
+        }
+    }
     public record PostView(Post post, Profile author, int commentCount, int likeCount, int participantCount, boolean mine, boolean liked, boolean joined) {}
     public record CommentView(Comment comment, Profile author, boolean mine) {}
     public record DetailView(PostView item, List<CommentView> comments) {}
@@ -38,13 +61,21 @@ public class CommunityService {
     private final ObjectMapper mapper;
     private final Path file;
     private final CombinedPlaceService catalog;
+    private final Clock clock;
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    static final long NFC_DAY_MS = 86_400_000L;
+    static final long NFC_LEASE_MS = 15_000L;
     private Snapshot db;
 
+    @Autowired
     public CommunityService(ObjectMapper mapper, CombinedPlaceService catalog,
                             @Value("${community.store:./data/community.json}") String filename) throws java.io.IOException {
-        this.mapper = mapper; this.catalog = catalog; this.file = Path.of(filename).toAbsolutePath();
+        this(mapper, catalog, filename, Clock.systemUTC());
+    }
+    CommunityService(ObjectMapper mapper, CombinedPlaceService catalog, String filename, Clock clock) throws java.io.IOException {
+        this.mapper = mapper; this.catalog = catalog; this.file = Path.of(filename).toAbsolutePath(); this.clock = clock;
         db = Files.exists(file) ? mapper.readValue(Files.readString(file), Snapshot.class)
-            : new Snapshot(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+            : new Snapshot(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
     }
     private static String id() { return UUID.randomUUID().toString(); }
     private static String now() { return Instant.now().toString(); }
@@ -157,7 +188,11 @@ public class CommunityService {
     }
     public synchronized DetailView like(String token, String id, boolean liked) {
         var user = require(token); var post = findPost(id);
-        return write(() -> { if (liked) post.likes.add(user.id); else post.likes.remove(user.id); return detail(token, id); });
+        return write(() -> {
+            if (liked && post.likes.add(user.id)) award(user, "like", id, 1);
+            else if (!liked) post.likes.remove(user.id);
+            return detail(token, id);
+        });
     }
     public synchronized DetailView join(String token, String id, boolean joined) {
         var user = require(token); var post = findPost(id);
@@ -178,7 +213,105 @@ public class CommunityService {
     }
     public synchronized DetailView comment(String token, String id, String content) {
         var user = require(token); findPost(id); String value = text(content, 1, 1000, "댓글");
-        return write(() -> { db.comments.add(new Comment(id(), id, user.id, value, now())); return detail(token, id); });
+        return write(() -> {
+            var comment = new Comment(id(), id, user.id, value, now());
+            db.comments.add(comment); award(user, "comment", comment.id, 5);
+            return detail(token, id);
+        });
+    }
+    private int award(Profile user, String reason, String target, int amount) {
+        if (db.points.stream().anyMatch(p -> p.userId.equals(user.id) && p.reason.equals(reason) && p.target.equals(target))) return 0;
+        db.points.add(new PointEntry(user.id, reason, target, amount, now()));
+        return amount;
+    }
+    private double total(Profile user) { return total(user, db.nfcDays); }
+    private double total(Profile user, List<NfcDay> days) {
+        return db.points.stream().filter(p -> p.userId.equals(user.id)).mapToLong(PointEntry::amount).sum()
+            + days.stream().filter(d -> d.userId.equals(user.id)).mapToDouble(d -> nfcPoints(d.millis)).sum();
+    }
+    private static double nfcPoints(long millis) { return Math.min(100, millis * 100.0 / NFC_DAY_MS); }
+    private NfcSession nfcSession(Profile user) { return db.nfcSessions.stream().filter(s -> s.userId.equals(user.id)).findFirst().orElse(null); }
+    private static LocalDate seoulDate(long millis) { return Instant.ofEpochMilli(millis).atZone(SEOUL).toLocalDate(); }
+    private static long nextMidnight(long millis) { return seoulDate(millis).plusDays(1).atStartOfDay(SEOUL).toInstant().toEpochMilli(); }
+    private static void accrue(List<NfcDay> days, NfcSession session, long until) {
+        long cursor = session.cursorAt;
+        while (cursor < until) {
+            long end = Math.min(until, nextMidnight(cursor)); String date = seoulDate(cursor).toString();
+            var previous = days.stream().filter(d -> d.userId.equals(session.userId) && d.date.equals(date)).findFirst().orElse(null);
+            long elapsed = Math.min(NFC_DAY_MS, (previous == null ? 0 : previous.millis) + end - cursor);
+            if (previous != null) days.remove(previous);
+            days.add(new NfcDay(session.userId, date, elapsed)); cursor = end;
+        }
+    }
+    private void settleNfc(Profile user, long now) {
+        var session = nfcSession(user); if (session == null) return;
+        long until = Math.max(session.cursorAt, Math.min(now, session.lastSeenAt + NFC_LEASE_MS));
+        accrue(db.nfcDays, session, until); db.nfcSessions.remove(session);
+        if (now <= session.lastSeenAt + NFC_LEASE_MS) db.nfcSessions.add(new NfcSession(user.id, session.petName, session.startedAt, until, Math.max(now, session.lastSeenAt)));
+    }
+    public synchronized PointsView points(String token) {
+        var user = require(token); long now = clock.millis(); var session = nfcSession(user);
+        var projected = new ArrayList<>(db.nfcDays);
+        if (session != null) accrue(projected, session, Math.min(now, session.lastSeenAt + NFC_LEASE_MS));
+        String date = seoulDate(now).toString();
+        long today = projected.stream().filter(d -> d.userId.equals(user.id) && d.date.equals(date)).mapToLong(NfcDay::millis).sum();
+        var history = new ArrayList<PointHistory>();
+        db.points.stream().filter(p -> p.userId.equals(user.id)).forEach(p -> history.add(new PointHistory(p.reason, p.target, p.amount, p.createdAt)));
+        projected.stream().filter(d -> d.userId.equals(user.id) && d.millis > 0).forEach(d -> history.add(new PointHistory("nfc", d.date, nfcPoints(d.millis), LocalDate.parse(d.date).atStartOfDay(SEOUL).toInstant().toString())));
+        boolean active = session != null && now < session.lastSeenAt + NFC_LEASE_MS;
+        return new PointsView(total(user, projected), history.stream().sorted(Comparator.comparing(PointHistory::createdAt).reversed()).limit(20).toList(),
+            new NfcView(active, session == null ? user.petName : session.petName, "SIM-" + user.id.substring(0, 8), date, today, nfcPoints(today), now,
+                active ? session.lastSeenAt + NFC_LEASE_MS : now, nextMidnight(now), active ? session.startedAt : 0));
+    }
+    public synchronized PointsView nfcProximity(String token, boolean enabled) {
+        var user = require(token);
+        if (enabled && user.petName.isBlank()) throw bad("이웃 프로필에 반려동물 이름을 먼저 등록해주세요.");
+        long now = clock.millis();
+        return write(() -> {
+            settleNfc(user, now);
+            if (!enabled) db.nfcSessions.removeIf(s -> s.userId.equals(user.id));
+            else if (nfcSession(user) == null) db.nfcSessions.add(new NfcSession(user.id, user.petName, now, now, now));
+            return points(token);
+        });
+    }
+    public synchronized PointsView nfcHeartbeat(String token) {
+        var user = require(token); long now = clock.millis();
+        return write(() -> { settleNfc(user, now); return points(token); });
+    }
+    public synchronized SharedTripView createShare(String token, ShareInput input) {
+        var user = require(token);
+        if (input.stops == null || input.stops.isEmpty() || input.stops.size() > 8) throw bad("공유할 장소는 1~8곳으로 선택해주세요.");
+        var stops = new ArrayList<SharedPlace>();
+        var seen = new HashSet<String>();
+        for (var p : input.stops) {
+            if (p == null) throw bad("공유할 장소를 확인해주세요.");
+            String placeId = text(p.id, 1, 80, "장소"), name = text(p.name, 1, 200, "장소 이름"), address = text(p.address, 0, 300, "주소");
+            if (placeId.startsWith("demo-") || !seen.add(placeId) || !Set.of("attraction", "culture", "festival", "course", "leisure", "stay", "shopping", "restaurant", "care").contains(Objects.requireNonNullElse(p.category, ""))) throw bad("공유할 장소를 확인해주세요.");
+            double lat, lon;
+            try { lat = Double.parseDouble(p.latitude); lon = Double.parseDouble(p.longitude); }
+            catch (RuntimeException ex) { throw bad("장소의 위치를 확인해주세요."); }
+            if (!Double.isFinite(lat) || !Double.isFinite(lon) || lat < 32 || lat > 39.5 || lon < 124 || lon > 132) throw bad("장소의 위치를 확인해주세요.");
+            stops.add(new SharedPlace(placeId, name, address, p.category, Double.toString(lat), Double.toString(lon)));
+        }
+        // Place identity and order define a share; cosmetic edits cannot earn extra rewards.
+        String fingerprint = hash(mapper.writeValueAsString(stops.stream().map(SharedPlace::id).toList()));
+        var existing = db.shares.stream().filter(s -> s.ownerId.equals(user.id) && s.fingerprint.equals(fingerprint)).findFirst().orElse(null);
+        if (existing != null) return new SharedTripView(existing.id, existing.stops);
+        return write(() -> {
+            var share = new SharedTrip(id(), user.id, fingerprint, List.copyOf(stops)); db.shares.add(share);
+            return new SharedTripView(share.id, share.stops);
+        });
+    }
+    private SharedTrip findShare(String id) {
+        return db.shares.stream().filter(s -> s.id.equals(id)).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "공유한 코스를 찾을 수 없어요."));
+    }
+    public synchronized SharedTripView sharedTrip(String id) {
+        var share = findShare(id); return new SharedTripView(share.id, share.stops);
+    }
+    public synchronized ShareReward completeShare(String token, String id) {
+        var user = require(token); var share = findShare(id);
+        if (!share.ownerId.equals(user.id)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "내 코스의 공유만 적립할 수 있어요.");
+        return write(() -> { int awarded = award(user, "share", share.fingerprint, 10); return new ShareReward(total(user), awarded); });
     }
     public synchronized DetailView deleteComment(String token, String id, String commentId) {
         var user = require(token); findPost(id);
