@@ -240,9 +240,9 @@ class KakaoLoginTests {
         assertEquals(404, send("PUT", dogs + "/" + id, neighbor, input, true).statusCode());
         assertEquals(404, send("GET", dogs + "/" + id + "/public", null, null, false).statusCode());
 
-        var profile = send("POST", "/api/community/profile", null, Map.of("nickname", "산책 코스 작성자"), true);
+        var profile = send("POST", "/api/community/profile", owner, Map.of("nickname", "산책 코스 작성자"), true);
         assertEquals(200, profile.statusCode());
-        String travelerCookie = profile.headers().firstValue("set-cookie").orElseThrow().split(";", 2)[0];
+        String travelerCookie = owner;
         var stops = csv.inRegion("11").stream().map(CsvFacilities.Facility::place)
                 .filter(place -> !place.latitude().isBlank() && !place.longitude().isBlank()).limit(2)
                 .map(place -> Map.of("id", place.id(), "latitude", place.latitude(), "longitude", place.longitude())).toList();
@@ -264,6 +264,8 @@ class KakaoLoginTests {
         var matches = json(200, send("GET", filtered, owner, null, false));
         assertEquals(1, matches.path("total").asInt());
         assertEquals(matchingCourseId, matches.path("items").get(0).path("course").path("id").asString());
+        assertTrue(matches.path("items").get(0).path("mine").asBoolean());
+        assertEquals(1, json(200, send("GET", filtered + "&mine=true", owner, null, false)).path("total").asInt());
         var editedWalk = with(walk, "minutes", 28);
         body.put("walk", editedWalk);
         var editedCourse = json(200, send("PUT", courses + "/" + matchingCourseId, travelerCookie, body, true)).path("course");
@@ -327,6 +329,14 @@ class KakaoLoginTests {
         assertEquals("S256", query.getFirst("code_challenge_method"));
         assertFalse(location.toString().contains("test-secret"));
         return new Attempt(cookie(response), query.getFirst("state"), query.getFirst("code_challenge"));
+    }
+
+    @Test void loginReturnsToPointShop() throws Exception {
+        var attempt = start("shop");
+        permitSignIn(attempt, "포인트 여행자");
+        var response = callback(attempt, "code=approved");
+        assertRedirect("/#shop", response);
+        assertNotNull(session(cookie(response)).path("user").path("id").asString(null));
     }
 
     private void permitSignIn(Attempt attempt, String nickname) {

@@ -187,7 +187,7 @@ class AuthController {
             boolean dogPage = "dogs".equals(attempt.section()) || "community/dogs".equals(attempt.section());
             String token = sessions.signIn(signIn.member().id(), signIn.showDogSetup() && !dogPage);
             return ResponseEntity.status(HttpStatus.SEE_OTHER).location(homeUri(attempt.section(), ""))
-                    .header(HttpHeaders.SET_COOKIE, cookie(token, AuthSessionStore.SESSION_TIMEOUT)).build();
+                    .header(HttpHeaders.SET_COOKIE, cookie(token, AuthSessionStore.SESSION_TIMEOUT), expiredLegacyCookie()).build();
         } catch (IOException | RuntimeException ex) {
             LOG.warn("Could not complete the local Kakao sign-in ({})", ex.getClass().getSimpleName());
             return home(attempt.section(), "failed");
@@ -206,7 +206,7 @@ class AuthController {
         if (!"web".equals(client)) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
     }
 
-    private static String browserToken(HttpServletRequest request) {
+    static String browserToken(HttpServletRequest request) {
         var cookies = request.getCookies();
         if (cookies != null) for (var cookie : cookies) if (SESSION_COOKIE.equals(cookie.getName())) return cookie.getValue();
         return null;

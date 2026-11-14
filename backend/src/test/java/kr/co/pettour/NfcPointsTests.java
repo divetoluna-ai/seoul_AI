@@ -40,6 +40,22 @@ class NfcPointsTests {
         service.nfcProximity("a", true); clock.advance(5000); service.nfcProximity("a", false);
         assertEquals(3_605_000, service.points("a").nfc().millisToday());
     }
+    @Test void unifiedProfileEditsUpdateLinkedDogWithoutResettingPointsOrTag() throws Exception {
+        var service = service();
+        var before = service.nfcProximity("a", true);
+        clock.advance(5000); service.nfcHeartbeat("a");
+        var profile = service.me("a");
+        service.saveProfile("a", new ProfileInput("보리보호자", "보리새이름"));
+        var after = service.points("a");
+        assertEquals(profile.id(), service.me("a").id());
+        assertEquals("보리새이름", after.nfc().petName());
+        assertEquals(before.nfc().tagId(), after.nfc().tagId());
+        assertEquals(5000, after.nfc().millisToday());
+        assertTrue(after.nfc().active());
+        service = new CommunityService(mapper, null, root.resolve("community.json").toString(), clock);
+        assertEquals(after.total(), service.points("a").total());
+        assertEquals("보리새이름", service.points("a").nfc().petName());
+    }
     @Test void repeatedStartMultipleTabsAndExpiredConnectionsDoNotMultiplyTime() throws Exception {
         var service = service(); service.nfcProximity("a", true);
         clock.advance(5000); service.nfcProximity("a", true);

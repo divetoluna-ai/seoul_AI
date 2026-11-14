@@ -4,6 +4,8 @@ import kakaoLoginButton from './kakao-login.svg';
 import DogProfiles, { DogProfileForm, PublicDogProfile } from './DogProfiles';
 import { accountApi, AccountRequestError, type DogProfile, type DogInput } from './dog-profiles';
 import './account.css';
+import { useMemberProfile } from './MemberProfile';
+import type { MemberUser } from './member-profile';
 
 type Session = {
   enabled: boolean;
@@ -20,11 +22,13 @@ const callbackErrors: Record<string, string> = {
   unavailable: '아직 카카오 로그인 설정이 완료되지 않았어요.',
 };
 
-export default function AccountMenu({ dogs, onDogsChange }: {
+export default function AccountMenu({ dogs, onDogsChange, onSessionChange }: {
+  onSessionChange: (loggedIn: boolean, user?: MemberUser | null) => void;
   dogs: DogProfile[] | null;
   onDogsChange: Dispatch<SetStateAction<DogProfile[] | null>>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const { profile, openProfile } = useMemberProfile();
   const [session, setSession] = useState<Session | null>(null);
   const [sessionError, setSessionError] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -36,7 +40,7 @@ export default function AccountMenu({ dogs, onDogsChange }: {
   const [hash, setHash] = useState(window.location.hash);
   const publicDogId = /^#dog\/([a-f0-9-]{36})$/.exec(hash)?.[1];
   const dogPage = hash === '#dogs' || hash === '#community/dogs';
-  const showDogSetup = Boolean(session?.user && session.dogSetupPending && !dogPage && !publicDogId);
+  const showDogSetup = Boolean(session?.user && session.dogSetupPending && dogPage && !publicDogId);
 
   useEffect(() => {
     const sync = () => setHash(window.location.hash);
@@ -72,14 +76,25 @@ export default function AccountMenu({ dogs, onDogsChange }: {
       .then(data => {
         if (!controller.signal.aborted) {
           setSession(data);
+          onSessionChange(!!data.user, data.user);
+          if (!data.user) onDogsChange(null);
           if (data.dogSetupPending) setFeedback('');
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted) setSessionError('로그인 정보를 불러오지 못했어요.');
+        if (!controller.signal.aborted) { setSession(null); onSessionChange(false); setSessionError('로그인 정보를 불러오지 못했어요.'); }
       });
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, onSessionChange]);
+  useEffect(() => {
+    const refresh = () => setRetry(value => value + 1);
+    const expired = () => { setSession(current => current && { ...current, user: null }); onSessionChange(false); refresh(); };
+    const visible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh); window.addEventListener('auth-session-expired', expired);
+    document.addEventListener('visibilitychange', visible);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); window.removeEventListener('auth-session-expired', expired); document.removeEventListener('visibilitychange', visible); };
+  }, [onSessionChange]);
 
   useEffect(() => {
     if (!session?.user || showDogSetup) return;
@@ -91,6 +106,7 @@ export default function AccountMenu({ dogs, onDogsChange }: {
         if (abort.signal.aborted) return;
         if (error instanceof AccountRequestError && error.status === 401) {
           onDogsChange(null);
+          onSessionChange(false);
           setSession(current => current && { ...current, user: null });
         } else setDogsError(error.message);
       });
@@ -100,6 +116,7 @@ export default function AccountMenu({ dogs, onDogsChange }: {
   function handleSessionExpiry(error: unknown) {
     if (error instanceof AccountRequestError && error.status === 401) {
       onDogsChange(null);
+      onSessionChange(false);
       setSession(current => current && { ...current, user: null, dogSetupPending: false });
       setFeedback('로그인 세션이 만료됐어요. 다시 로그인해주세요.');
       return true;
@@ -156,6 +173,7 @@ export default function AccountMenu({ dogs, onDogsChange }: {
     try {
       await accountApi('/logout', 'POST');
       onDogsChange(null);
+      onSessionChange(false);
       setSession(current => current && { ...current, user: null, dogSetupPending: false });
       closeAccount();
     } catch {
@@ -177,7 +195,7 @@ export default function AccountMenu({ dogs, onDogsChange }: {
   return <>
     <button type="button" className="account-trigger" onClick={showAccount} aria-haspopup="dialog">
       <UserRound size={17} aria-hidden="true" />
-      <span>{user?.nickname ?? '로그인'}</span>
+      <span>{profile?.nickname || user?.nickname || '로그인'}</span>
     </button>
     <dialog ref={dialog} className="account-dialog" aria-labelledby="account-title" onCancel={event => { event.preventDefault(); if (!showDogSetup) closeAccount(); }}>
       {!showDogSetup && <button type="button" className="dialog-close" aria-label="닫기" onClick={closeAccount}>
@@ -191,11 +209,13 @@ export default function AccountMenu({ dogs, onDogsChange }: {
           reminder={{ hidden: hideSetup, onChange: setHideSetup }}
           onSave={async input => { await saveDog('', input, hideSetup); finishSetup(); }}/>
       </> : publicDogId ? <PublicDogProfile key={publicDogId} id={publicDogId}/> : user ? <>
-        <p>{user.nickname}님, 카카오 계정으로 로그인했어요.</p>
-        {dogs ? <DogProfiles dogs={dogs} onSave={saveDog} onVisibilityChange={changeDogVisibility}/> : dogsError ? <>
+        <p>{profile?.nickname || user.nickname}님, 카카오 계정으로 로그인했어요.</p>
+        <button type="button" className="primary-button" onClick={() => { closeAccount(); openProfile(); }}>프로필 설정</button>
+        {!dogPage && <a className="course-outline" href="#dogs">반려견 맞춤 조건 관리</a>}
+        {dogPage && (dogs ? <DogProfiles dogs={dogs} onSave={saveDog} onVisibilityChange={changeDogVisibility}/> : dogsError ? <>
           <p role="alert">{dogsError}</p>
           <button type="button" className="course-outline" onClick={() => setRetry(value => value + 1)}>다시 시도</button>
-        </> : <p role="status">반려견 프로필을 불러오고 있어요…</p>}
+        </> : <p role="status">반려견 프로필을 불러오고 있어요…</p>)}
         <button type="button" className="secondary-button" disabled={signingOut} onClick={logout}>
           {signingOut ? '로그아웃 중…' : '로그아웃'}
         </button>
