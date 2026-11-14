@@ -53,4 +53,8 @@ class MemberStore {
         }
         return member;
     }
+
+    synchronized Member find(String id) {
+        return id == null ? null : members.values().stream().filter(member -> member.id().equals(id)).findFirst().orElse(null);
+    }
 }

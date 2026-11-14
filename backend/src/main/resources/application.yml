@@ -23,6 +23,7 @@ kakao:
     min-interval-ms: ${KAKAO_PHOTOS_MIN_INTERVAL_MS:1100}
 auth:
   members-file: ${AUTH_MEMBERS_FILE:./data/members.json}
+  sessions-file: ${AUTH_SESSIONS_FILE:./data/auth-sessions.json}
 community:
   store: ${COMMUNITY_STORE:./data/course-community.json}
 logging:
