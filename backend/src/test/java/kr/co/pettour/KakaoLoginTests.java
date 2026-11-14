@@ -87,7 +87,7 @@ class KakaoLoginTests {
         var first = start("community");
         permitSignIn(first, "보리 보호자");
         var callback = callback(first, "code=approved");
-        assertRedirect("/#community", callback);
+        assertRedirect("/#shop", callback);
         String authenticated = cookie(callback);
         assertNotEquals(first.cookie(), authenticated);
         assertTrue(session(first.cookie()).path("user").isNull());
@@ -114,7 +114,7 @@ class KakaoLoginTests {
         var second = start("explore");
         permitSignIn(second, "새 닉네임");
         var again = callback(second, "code=approved");
-        assertRedirect("/#explore", again);
+        assertRedirect("/#shop", again);
         var returning = session(cookie(again));
         assertTrue(returning.path("dogSetupPending").asBoolean());
         var sameMember = returning.path("user");
@@ -384,7 +384,7 @@ class KakaoLoginTests {
         var attempt = start(section);
         permitSignIn(attempt, providerId, nickname);
         var result = callback(attempt, "code=approved");
-        assertRedirect("/#" + section, result);
+        assertRedirect("/#" + (section.endsWith("dogs") ? section : "shop"), result);
         return cookie(result);
     }
 

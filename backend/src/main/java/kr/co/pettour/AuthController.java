@@ -180,7 +180,7 @@ class AuthController {
             var signIn = members.signIn(user);
             boolean dogPage = "dogs".equals(attempt.section()) || "community/dogs".equals(attempt.section());
             String token = sessions.signIn(signIn.member().id(), signIn.showDogSetup() && !dogPage);
-            return ResponseEntity.status(HttpStatus.SEE_OTHER).location(homeUri(attempt.section(), ""))
+            return ResponseEntity.status(HttpStatus.SEE_OTHER).location(homeUri(dogPage ? attempt.section() : "shop", ""))
                     .header(HttpHeaders.SET_COOKIE, cookie(token, AuthSessionStore.SESSION_TIMEOUT), expiredLegacyCookie()).build();
         } catch (IOException | RuntimeException ex) {
             LOG.warn("Could not complete the local Kakao sign-in ({})", ex.getClass().getSimpleName());
