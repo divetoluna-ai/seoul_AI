@@ -175,7 +175,7 @@ class CommunityIntegrationTests {
         Files.writeString(legacy, old);
         var isolated = new CommunityService(mapper, catalog, legacy.toString()); isolated.saveProfile("new-token", new CommunityService.ProfileInput("새여행자", ""));
         assertEquals(old, Files.readString(legacy)); assertTrue(Files.exists(folder.resolve("course-community.json")));
-        assertEquals(0, isolated.feed(null, "", "", "recent", 1, false, null).total());
+        assertEquals(0, isolated.feed(null, "", "", "recent", 1, false, null, false).total());
         Path corrupt = folder.resolve("broken.json"); Files.writeString(corrupt, "{broken");
         assertThrows(Exception.class, () -> new CommunityService(mapper, catalog, corrupt.toString())); assertEquals("{broken", Files.readString(corrupt));
     }

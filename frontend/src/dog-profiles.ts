@@ -1,13 +1,19 @@
-export const dogSizes = { SMALL: '소형', MEDIUM: '중형', LARGE: '대형' } as const;
-export type DogSize = keyof typeof dogSizes;
 export type DogInput = {
   name: string;
-  size: DogSize;
-  age: number | null;
   walkMinutes: number;
 };
-export type DogProfile = DogInput & { id: string; publicProfile: boolean };
-export type PublicDog = Pick<DogProfile, 'name' | 'size'>;
+export type DogProfile = {
+  id: string;
+  name: string | null;
+  walkMinutes: number | null;
+  publicProfile: boolean;
+};
+export type PublicDog = { name: string };
+
+export function dogProfileLabel(dog: DogProfile) {
+  const time = dog.walkMinutes == null ? '선호 시간 미등록' : `선호 ${dog.walkMinutes}분`;
+  return dog.name ? `${dog.name} · ${time}` : time;
+}
 
 export class AccountRequestError extends Error {
   constructor(public status: number, message: string) { super(message); }

@@ -1,11 +1,16 @@
 import type { Place } from './lib.ts';
 import { coordinatesOf, MAX_STOPS } from './trip.ts';
-import type { DogSize } from './dog-profiles.ts';
 
 export type Profile = { id: string; nickname: string; petName: string };
-export type WalkConditions = { minutes: number; sizes: DogSize[]; stairs: boolean | null; shade: boolean | null; quiet: boolean | null };
+export type WalkConditions = { minutes: number | null; stairs: boolean | null; shade: boolean | null; quiet: boolean | null };
+export type WalkOrder = 'SHORTER' | 'CLOSEST_TO_PREFERENCE';
 export type SharedCourse = { id: string; title: string; content: string; region: string; stops: Place[]; createdAt: string; updatedAt: string; walk?: WalkConditions | null };
-export type CourseView = { course: SharedCourse; author: Profile; likeCount: number; mine: boolean; liked: boolean };
+export type WalkAssessment = {
+  minutes: number | null;
+  maxMinutes: number | null;
+  time: 'WITHIN_LIMIT' | 'NO_LIMIT' | 'UNKNOWN';
+};
+export type CourseView = { course: SharedCourse; author: Profile; likeCount: number; mine: boolean; liked: boolean; recommendation?: WalkAssessment };
 export type CourseFeed = { items: CourseView[]; total: number; page: number; pageSize: number };
 export async function communityApi<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/community${path}`, { method, credentials: 'same-origin', signal,
