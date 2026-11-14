@@ -4,10 +4,10 @@ import {MeshBVH} from 'three-mesh-bvh';
 export function skinGarment(geometry:THREE.BufferGeometry,material:THREE.Material|THREE.Material[],body:THREE.SkinnedMesh):THREE.SkinnedMesh {
  const skin=body.geometry,positions=skin.getAttribute('position'),joints=skin.getAttribute('skinIndex'),weights=skin.getAttribute('skinWeight');
  if(!joints||!weights)throw new Error('몸 모델에 스킨 가중치가 없습니다.');
- const tree=new MeshBVH(skin.clone()),attribute=geometry.getAttribute('position');
+ const tree=new MeshBVH(skin.clone()),attribute=geometry.getAttribute('position'),reference=geometry.getAttribute('bodyPosition')??attribute;
  const indices:number[]=[],values:number[]=[],point=new THREE.Vector3(),triangle=new THREE.Triangle(),bary=new THREE.Vector3();
  try {for(let i=0;i<attribute.count;i++){
-  point.fromBufferAttribute(attribute,i);const hit=tree.closestPointToPoint(point);
+  point.fromBufferAttribute(reference,i);const hit=tree.closestPointToPoint(point);
   if(!hit)throw new Error('의상을 몸 표면에 연결하지 못했습니다.');
   // BVH may reorder triangle indices; use its own geometry for face lookup.
   const index=tree.geometry.index,vertices=[0,1,2].map(k=>index?index.getX(hit.faceIndex*3+k):hit.faceIndex*3+k);

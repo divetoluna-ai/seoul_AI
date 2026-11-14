@@ -1,8 +1,10 @@
 import * as THREE from 'three';
+import {fittedBodyGarment} from './avatar-body-garment';
 import type { Outfit } from './avatar-catalog';
 import type {RealModel} from './real-model-catalog';
 import { bodyClearance } from './avatar-surface-fit';
 export function fitRealClothes(source:THREE.Group,model:RealModel,outfit:Outfit,fit:{ease:number;length:number;width:number}):THREE.Group {
+ if(model.id!=='maltese')return fittedBodyGarment(source,model,outfit,fit);
  const group=new THREE.Group();
  const ease=fit.ease??.035,length=fit.length??1;
  const clearBody=bodyClearance(source);
