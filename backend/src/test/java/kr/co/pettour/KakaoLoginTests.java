@@ -45,6 +45,7 @@ class KakaoLoginTests {
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         registry.add("auth.members-file", () -> dataDir.resolve("members.json").toString());
+        registry.add("auth.sessions-file", () -> dataDir.resolve("auth-sessions.json").toString());
         registry.add("kakao.login.redirect-uri", () -> REDIRECT);
     }
 
