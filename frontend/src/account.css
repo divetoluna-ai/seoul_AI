@@ -141,3 +141,12 @@
   .account-trigger { padding: 8px; font-size: 11px; gap: 4px; max-width: 100px; }
   .account-trigger svg { width: 14px; }
 }
+
+.dog-list li { flex-wrap: wrap; }
+.dog-delete-button { color: #a3422e; }
+.dog-list li .dog-delete-confirm {
+  flex: 1 0 100%; min-width: 0; box-sizing: border-box;
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 12px; background: #fff3ee; border-radius: 8px;
+}
+.dog-delete-confirm p { flex-basis: 100%; margin: 0 0 4px; }

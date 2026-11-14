@@ -10,7 +10,7 @@ class WalkRecommendationTests {
     }
 
     private static MemberStore.DogProfile dog(Integer minutes) {
-        return new MemberStore.DogProfile("dog", null, minutes, false);
+        return new MemberStore.DogProfile("dog", null, minutes);
     }
 
     @Test void evaluatesOnlyAvailableCourseData() {

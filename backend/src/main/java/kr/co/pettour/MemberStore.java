@@ -28,9 +28,8 @@ class MemberStore {
     record SignIn(Member member, boolean showDogSetup) {}
     @JsonIgnoreProperties({"age", "size"})
     record DogInput(String name, Integer walkMinutes) {}
-    @JsonIgnoreProperties({"age", "size", "avoidStairs", "preferShade", "preferQuiet"})
-    record DogProfile(String id, String name, Integer walkMinutes, boolean publicProfile) {}
-    record PublicDog(String name) {}
+    @JsonIgnoreProperties({"age", "size", "avoidStairs", "preferShade", "preferQuiet", "publicProfile"})
+    record DogProfile(String id, String name, Integer walkMinutes) {}
     record Account(String id, String nickname, List<DogProfile> dogs, Instant dogSetupHiddenUntil) {
         Account {
             dogs = dogs == null ? List.of() : List.copyOf(dogs);
@@ -87,13 +86,6 @@ class MemberStore {
                 .findFirst().orElseThrow(MemberStore::dogNotFound);
     }
 
-    synchronized PublicDog publicDog(String id) {
-        return members.values().stream().flatMap(account -> account.dogs().stream())
-                .filter(dog -> dog.id().equals(id) && dog.publicProfile() && dog.name() != null)
-                .map(dog -> new PublicDog(dog.name()))
-                .findFirst().orElseThrow(MemberStore::dogNotFound);
-    }
-
     synchronized DogProfile saveDog(Member member, String id, DogInput input, boolean hideSetup) throws IOException {
         var entry = owner(member);
         var existing = id == null ? null : dog(member, id);
@@ -105,7 +97,7 @@ class MemberStore {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "선호 산책 시간은 1~600분으로 입력해주세요.");
         }
         var dog = new DogProfile(existing == null ? UUID.randomUUID().toString() : existing.id(),
-                name, input.walkMinutes(), existing != null && existing.publicProfile());
+                name, input.walkMinutes());
         return saveDog(entry, existing, dog, hideSetup);
     }
 
@@ -115,14 +107,13 @@ class MemberStore {
         save(entry.getKey(), new Account(account.id(), account.nickname(), account.dogs(), Instant.now().plus(DOG_SETUP_SNOOZE)));
     }
 
-    synchronized DogProfile setDogVisibility(Member member, String id, boolean publicProfile) throws IOException {
+    synchronized void deleteDog(Member member, String id) throws IOException {
         var entry = owner(member);
-        var dog = dog(member, id);
-        if (publicProfile && dog.name() == null)
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "공개할 반려견 이름이 없어요.");
-        if (dog.publicProfile() == publicProfile) return dog;
-        var updated = new DogProfile(dog.id(), dog.name(), dog.walkMinutes(), publicProfile);
-        return saveDog(entry, dog, updated, false);
+        var existing = dog(member, id);
+        var account = entry.getValue();
+        var remaining = new ArrayList<>(account.dogs());
+        remaining.remove(existing);
+        save(entry.getKey(), new Account(account.id(), account.nickname(), remaining, account.dogSetupHiddenUntil()));
     }
 
     private DogProfile saveDog(Map.Entry<Long, Account> entry, DogProfile existing, DogProfile dog, boolean hideSetup) throws IOException {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { UserRound, X } from 'lucide-react';
 import kakaoLoginButton from './kakao-login.svg';
-import DogProfiles, { DogProfileForm, PublicDogProfile } from './DogProfiles';
+import DogProfiles, { DogProfileForm } from './DogProfiles';
 import { accountApi, AccountRequestError, type DogProfile, type DogInput } from './dog-profiles';
 import './account.css';
 import { useMemberProfile } from './MemberProfile';
@@ -38,9 +38,8 @@ export default function AccountMenu({ dogs, onDogsChange, onSessionChange }: {
   const [hideSetup, setHideSetup] = useState(false);
   const [dogsError, setDogsError] = useState('');
   const [hash, setHash] = useState(window.location.hash);
-  const publicDogId = /^#dog\/([a-f0-9-]{36})$/.exec(hash)?.[1];
   const dogPage = hash === '#dogs' || hash === '#community/dogs';
-  const showDogSetup = Boolean(session?.user && session.dogSetupPending && dogPage && !publicDogId);
+  const showDogSetup = Boolean(session?.user && session.dogSetupPending && dogPage);
 
   useEffect(() => {
     const sync = () => setHash(window.location.hash);
@@ -49,8 +48,8 @@ export default function AccountMenu({ dogs, onDogsChange, onSessionChange }: {
   }, []);
 
   useEffect(() => {
-    if ((dogPage || publicDogId || showDogSetup) && !dialog.current?.open) dialog.current?.showModal();
-  }, [dogPage, publicDogId, showDogSetup]);
+    if ((dogPage || showDogSetup) && !dialog.current?.open) dialog.current?.showModal();
+  }, [dogPage, showDogSetup]);
 
   function closeAccount() {
     dialog.current?.close();
@@ -138,14 +137,11 @@ export default function AccountMenu({ dogs, onDogsChange, onSessionChange }: {
     }
   }
 
-  async function changeDogVisibility(id: string, publicProfile: boolean) {
+  async function deleteDog(id: string) {
     try {
-      const dog = await accountApi<DogProfile>(`/dogs/${id}/visibility`, 'PUT', { publicProfile });
-      onDogsChange(current => current?.map(item => item.id === id ? dog : item) ?? null);
-    } catch (error) {
-      handleSessionExpiry(error);
-      throw error;
-    }
+      await accountApi<void>(`/dogs/${id}`, 'DELETE');
+      onDogsChange(current => current?.filter(dog => dog.id !== id) ?? null);
+    } catch (error) { handleSessionExpiry(error); throw error; }
   }
 
   function finishSetup() {
@@ -201,18 +197,18 @@ export default function AccountMenu({ dogs, onDogsChange, onSessionChange }: {
       {!showDogSetup && <button type="button" className="dialog-close" aria-label="닫기" onClick={closeAccount}>
         <X size={20} />
       </button>}
-      <h2 id="account-title">{showDogSetup ? '반려견 등록' : publicDogId ? '공개 반려견 프로필' : user ? '내 계정' : '로그인 · 회원가입'}</h2>
+      <h2 id="account-title">{showDogSetup ? '반려견 등록' : user ? '내 계정' : '로그인 · 회원가입'}</h2>
       {feedback && <p className="account-feedback" role="alert">{feedback}</p>}
       {showDogSetup ? <>
         <p>반려견을 등록하면 맞춤 코스를 볼 수 있어요. 나중에 내 계정에서 등록해도 돼요.</p>
         <DogProfileForm cancelLabel="건너뛰기" skipping={skippingSetup} onCancel={() => void skipSetup()}
           reminder={{ hidden: hideSetup, onChange: setHideSetup }}
           onSave={async input => { await saveDog('', input, hideSetup); finishSetup(); }}/>
-      </> : publicDogId ? <PublicDogProfile key={publicDogId} id={publicDogId}/> : user ? <>
+      </> : user ? <>
         <p>{profile?.nickname || user.nickname}님, 카카오 계정으로 로그인했어요.</p>
         <button type="button" className="primary-button" onClick={() => { closeAccount(); openProfile(); }}>프로필 설정</button>
         {!dogPage && <a className="course-outline" href="#dogs">반려견 맞춤 조건 관리</a>}
-        {dogPage && (dogs ? <DogProfiles dogs={dogs} onSave={saveDog} onVisibilityChange={changeDogVisibility}/> : dogsError ? <>
+        {dogPage && (dogs ? <DogProfiles dogs={dogs} onSave={saveDog} onDelete={deleteDog}/> : dogsError ? <>
           <p role="alert">{dogsError}</p>
           <button type="button" className="course-outline" onClick={() => setRetry(value => value + 1)}>다시 시도</button>
         </> : <p role="status">반려견 프로필을 불러오고 있어요…</p>)}
