@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MeshBVH } from 'three-mesh-bvh';
 
 /** Imported body geometry must be baked into the same coordinates as the garment. */
 export function bodyClearance(source: THREE.Group) {
@@ -9,7 +10,9 @@ export function bodyClearance(source: THREE.Group) {
  return (point: THREE.Vector3, clearance: number, maxDistance = .3): THREE.Vector3 => {
   let nearest: { point: THREE.Vector3; distance: number; faceIndex: number; mesh: THREE.Mesh } | undefined;
   for (const mesh of bodies) {
-   const hit = mesh.geometry.boundsTree!.closestPointToPoint(point);
+   const tree = mesh.geometry.boundsTree;
+   if (!(tree instanceof MeshBVH)) continue;
+   const hit = tree.closestPointToPoint(point);
    if (hit && hit.distance <= maxDistance && (!nearest || hit.distance < nearest.distance)) nearest = { ...hit, mesh };
   }
   if (!nearest) return point;

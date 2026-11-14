@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { StudioDesign } from './AvatarStudio';
-import { buildRealPet } from './avatar-realistic';
+import { buildRealPet, type LivePet } from './avatar-realistic';
+import {realModelFor} from './real-model-catalog';
 
 type Props = { design: StudioDesign; captureRef: React.RefObject<(() => void) | null>; view: number; focus: boolean };
 export default function AvatarScene({ design, captureRef, view, focus }: Props) {
@@ -12,6 +13,7 @@ export default function AvatarScene({ design, captureRef, view, focus }: Props) 
   const resetView = useRef<((focus:boolean) => void) | null>(null);
   const [error, setError] = useState(false);
   const [modelStatus,setModelStatus]=useState('');
+  const [motionState,setMotionState]=useState('');
   useEffect(() => {
     const el = host.current!;
     let renderer: THREE.WebGLRenderer;
@@ -30,7 +32,7 @@ export default function AvatarScene({ design, captureRef, view, focus }: Props) 
     controls.enableDamping = true; controls.minDistance = 2.5; controls.maxDistance = 16;
     controls.maxPolarAngle = Math.PI / 2.12; controls.minPolarAngle = 0.2;
     controls.target.set(0, 1, 0);
-    const home = (focus = true) => { if (focus) { camera.position.set(3.15, 2.3, 5.6); controls.target.set(.25, .98, .5); } else { camera.position.set(8, 7, 9); controls.target.set(0, 1, 0); } controls.update(); };
+    const home = (focus = true) => { if (focus) { camera.position.set(3.15, 2.3, 5.6); controls.target.set(.25, .98, .5); } else { camera.position.set(6.5, 4.7, 7.7); controls.target.set(0, .8, 0); } controls.update(); };
     home(); resetView.current = home;
     const pmrem = new THREE.PMREMGenerator(renderer);
     const room = new RoomEnvironment();
@@ -43,9 +45,12 @@ export default function AvatarScene({ design, captureRef, view, focus }: Props) 
     sun.shadow.camera.top = 7; sun.shadow.camera.bottom = -7; sun.shadow.normalBias = .018; sun.shadow.radius = 3; sun.shadow.blurSamples = 16; scene.add(sun);
     let world = new THREE.Group(); scene.add(world);
     const dispose = (group: THREE.Group) => group.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); const materials = Array.isArray(o.material) ? o.material : [o.material]; materials.forEach(m => { const textures=new Set<THREE.Texture>(); for(const value of Object.values(m)) if(value instanceof THREE.Texture) textures.add(value); textures.forEach(texture=>texture.dispose()); m.dispose(); }); } });
-    let generation=0;
+    let generation=0,livePet:LivePet|undefined,lastMotion='',activeCredit='';
     rebuild.current = d => {
       const version=++generation;
+      activeCredit=realModelFor(d.breedId,d.species).source?.credit??'';
+      livePet?.motion?.dispose();livePet=undefined;
+      lastMotion='';setMotionState('');
       scene.remove(world); dispose(world); world = new THREE.Group(); scene.add(world);
       const material = (color: string) => new THREE.MeshStandardMaterial({ color, roughness: .78 });
       const mesh = (g: THREE.BufferGeometry, color: string, p: number[], parent: THREE.Group = world) => {
@@ -69,7 +74,7 @@ export default function AvatarScene({ design, captureRef, view, focus }: Props) 
       ball([.24, .27, .035], '#a5b796', [1.4, 2.15, -2.95]);
       ball([.11, .13, .04], '#d6ad7e', [1.18, 2.38, -2.94]);
       if (d.rug) { const rug = cylinder(1.85, .035, d.rugColor, [.35, .005, .45]); rug.scale.z = .82; }
-      {setModelStatus('4K 동물 모델을 불러오고 있어요…');buildRealPet(d).then(pet=>{if(version!==generation){dispose(pet);return;}world.add(pet);setModelStatus('');}).catch(()=>{if(version===generation)setModelStatus('모델을 불러오지 못했어요. 페이지를 새로고침해주세요.');});}
+      {setModelStatus('4K 동물 모델을 불러오고 있어요…');buildRealPet(d).then(pet=>{const loaded=pet as LivePet;if(version!==generation){loaded.motion?.dispose();dispose(pet);return;}livePet=loaded;world.add(pet);setModelStatus('');}).catch(()=>{if(version===generation)setModelStatus('모델을 불러오지 못했어요. 페이지를 새로고침해주세요.');});}
       for (const f of d.furniture) {
         const g = new THREE.Group(); g.position.set(f.x, 0, f.z); g.rotation.y = f.rotation * Math.PI / 180; world.add(g);
         if (f.type === 'bed') { const bed = cylinder(.75, .16, f.color, [0, .09, 0], g); bed.scale.z = .8; const cushion = cylinder(.61, .18, '#f6e8cf', [0, .2, 0], g); cushion.scale.z = .8; const pillow = ball([.55, .18, .19], f.color, [0, .29, -.38], g); pillow.rotation.x = -.3; }
@@ -80,11 +85,12 @@ export default function AvatarScene({ design, captureRef, view, focus }: Props) 
     };
     const resize = () => { const w = el.clientWidth, h = el.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
     const observer = new ResizeObserver(resize); observer.observe(el); resize();
-    renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
-    captureRef.current = () => { renderer.render(scene, camera); renderer.domElement.toBlob(blob => { if (!blob) return; const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.download = '나의-펫-스튜디오.png'; a.href = url; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000); }, 'image/png'); };
-    return () => { generation++; observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); dispose(world); environment.dispose(); renderer.dispose(); el.removeChild(renderer.domElement); rebuild.current = null; resetView.current = null; captureRef.current = null; };
+    let lastFrame=performance.now();
+    renderer.setAnimationLoop(() => {const now=performance.now(),delta=(now-lastFrame)/1000;lastFrame=now;if(!document.hidden)livePet?.motion?.update(delta);const state=livePet?.motion?.state??'';if(state!==lastMotion){lastMotion=state;setMotionState(state);}controls.update();renderer.render(scene, camera);});
+    captureRef.current = () => { renderer.render(scene, camera); const output=document.createElement('canvas');output.width=renderer.domElement.width;output.height=renderer.domElement.height;const ctx=output.getContext('2d')!;ctx.drawImage(renderer.domElement,0,0);if(activeCredit){const size=Math.max(12,output.width/80);ctx.fillStyle='#fffffff0';ctx.fillRect(0,output.height-size*3,output.width,size*3);ctx.fillStyle='#334b39';ctx.font=`${size}px sans-serif`;ctx.fillText(`3D model: ${activeCredit}`,size,output.height-size*1.55,output.width-size*2);ctx.fillText('Modified: custom rig, animation and clothing · creativecommons.org/licenses/by/4.0/',size,output.height-size*.4,output.width-size*2);}output.toBlob(blob => { if (!blob) return; const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.download = '나의-펫-스튜디오.png'; a.href = url; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000); }, 'image/png'); };
+    return () => { generation++; livePet?.motion?.dispose(); observer.disconnect(); renderer.setAnimationLoop(null); controls.dispose(); dispose(world); environment.dispose(); renderer.dispose(); el.removeChild(renderer.domElement); rebuild.current = null; resetView.current = null; captureRef.current = null; };
   }, [captureRef]);
   useEffect(() => { rebuild.current?.(design); }, [design]);
   useEffect(() => { resetView.current?.(focus); }, [view, focus]);
-  return <div className="avatar-canvas" ref={host}>{modelStatus && <div className="studio-model-status" role="status">{modelStatus}</div>}{error && <div className="avatar-webgl-error" role="alert">3D 화면을 열지 못했어요. 브라우저의 하드웨어 가속을 켜거나 다른 브라우저에서 열어주세요.</div>}</div>;
+  return <div className="avatar-canvas" ref={host} data-motion={motionState}>{motionState&&<span className="studio-motion-status">{({idle:'주위를 살펴봐요',walk:'방을 둘러봐요',sitDown:'앉는 중이에요',sitIdle:'앉아서 쉬어요',standUp:'다시 일어나요',lieDown:'편하게 엎드려요',lieIdle:'엎드려 쉬어요',getUp:'다시 일어나요'} as Record<string,string>)[motionState]}</span>}{modelStatus && <div className="studio-model-status" role="status">{modelStatus}</div>}{error && <div className="avatar-webgl-error" role="alert">3D 화면을 열지 못했어요. 브라우저의 하드웨어 가속을 켜거나 다른 브라우저에서 열어주세요.</div>}</div>;
 }
