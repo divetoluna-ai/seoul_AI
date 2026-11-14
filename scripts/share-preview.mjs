@@ -34,8 +34,8 @@ const server = http.createServer(async (req, res) => {
       [new RegExp(`^/api/auth/dogs/${identifier}$`), ['PUT']],
       [new RegExp(`^/api/auth/dogs/${identifier}/visibility$`), ['PUT']],
       [new RegExp(`^/api/auth/dogs/${identifier}/public$`), ['GET', 'HEAD']],
-      [/^\/api\/places\/(?:[0-9]{1,20}|csv-[a-f0-9]{20})\/kakao-photo$/, ['POST']],
-      [/^\/api\/places\/(?:[0-9]{1,20}|csv-[a-f0-9]{20})\/photo$/, ['POST']],
+      [/^\/api\/places\/(?:[0-9]{1,20}|csv-[a-f0-9]{20})\/(?:photo|kakao-photo)$/, ['POST']],
+      [/^\/api\/places\/photos\/[a-f0-9]{64}$/, ['GET', 'HEAD']],
       [/^\/api\/community\/profile$/, ['GET', 'HEAD', 'POST']],
       [/^\/api\/community\/courses$/, ['GET', 'HEAD', 'POST']],
       [new RegExp(`^/api/community/courses/${identifier}$`), ['GET', 'HEAD', 'PUT', 'DELETE']],
@@ -51,7 +51,8 @@ const server = http.createServer(async (req, res) => {
     if (!readOnly && !route) return fail(res, 404, '경로를 찾을 수 없습니다.');
     const allowed = readOnly ? ['GET', 'HEAD'] : route[1];
     if (!allowed.includes(req.method)) { res.setHeader('Allow', allowed.join(', ')); return fail(res, 405, '지원하지 않는 요청입니다.'); }
-    const headers = { Accept: 'application/json' };
+    const photoFile = /^\/api\/places\/photos\/[a-f0-9]{64}$/.test(url.pathname);
+    const headers = { Accept: photoFile ? 'image/*' : 'application/json' };
     if (!readOnly) {
       if (req.headers.cookie) headers.Cookie = req.headers.cookie;
       if (req.headers['x-community-client']) headers['X-Community-Client'] = req.headers['x-community-client'];
@@ -60,7 +61,7 @@ const server = http.createServer(async (req, res) => {
       if (Number(req.headers['content-length']) > 850000) return fail(res, 413, '사진 또는 글의 용량이 너무 커요.');
     }
     const upstream = http.request({ hostname: '127.0.0.1', port: 8080, path: url.pathname + url.search, method: req.method, headers }, response => {
-      const resultHeaders = { 'Content-Type': response.headers['content-type'] || 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
+      const resultHeaders = { 'Content-Type': response.headers['content-type'] || 'application/json; charset=utf-8', 'Cache-Control': photoFile ? response.headers['cache-control'] || 'no-store' : 'no-store' };
       if (!readOnly && response.headers['set-cookie']) resultHeaders['Set-Cookie'] = response.headers['set-cookie'];
       if (authRoute && response.headers.location) resultHeaders.Location = response.headers.location;
       if (authRoute) resultHeaders['Referrer-Policy'] = 'no-referrer';

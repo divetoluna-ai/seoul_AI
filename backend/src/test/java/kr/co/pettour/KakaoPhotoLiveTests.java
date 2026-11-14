@@ -4,8 +4,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.json.JsonMapper;
-import java.net.URI;
-import java.net.http.*;
 import java.nio.file.Path;
 import static kr.co.pettour.Models.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,10 +20,9 @@ class KakaoPhotoLiveTests {
         assertEquals("collected", result.status());
         assertEquals("kakao", result.place().imageSource());
         assertEquals("https://place.map.kakao.com/26338954", result.place().imagePage());
-        var response = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).build().send(
-            HttpRequest.newBuilder(URI.create(result.place().image())).timeout(java.time.Duration.ofSeconds(15)).GET().build(),
-            HttpResponse.BodyHandlers.discarding());
-        assertEquals(200, response.statusCode());
-        assertTrue(response.headers().firstValue("Content-Type").orElse("").startsWith("image/"));
+        assertTrue(result.place().image().matches("/api/places/photos/[a-f0-9]{64}"));
+        var asset = collector.asset(result.place().image().substring("/api/places/photos/".length()));
+        assertTrue(asset.contentType().startsWith("image/"));
+        assertTrue(asset.bytes().length > 1000);
     }
 }

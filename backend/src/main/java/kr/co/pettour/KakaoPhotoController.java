@@ -1,5 +1,9 @@
 package kr.co.pettour;
 
+import java.io.IOException;
+import java.time.Duration;
+import org.springframework.http.*;
+import org.springframework.web.server.ResponseStatusException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.validation.annotation.Validated;
@@ -18,6 +22,17 @@ public class KakaoPhotoController {
     private final KakaoPlaceFinder finder;
     public KakaoPhotoController(CombinedPlaceService catalog, KakaoPhotoService photos, KakaoPlaceFinder finder) {
         this.catalog = catalog; this.photos = photos; this.finder = finder;
+    }
+    @GetMapping("/photos/{key}")
+    public ResponseEntity<byte[]> image(@PathVariable @Pattern(regexp="[a-f0-9]{64}") String key) {
+        try {
+            var asset = photos.asset(key);
+            return ResponseEntity.ok().contentType(MediaType.parseMediaType(asset.contentType()))
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(1)).cachePublic())
+                .header("X-Content-Type-Options", "nosniff").body(asset.bytes());
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "사진을 불러올 수 없습니다.");
+        }
     }
     @PostMapping("/{id}/photo")
     public KakaoPhotoService.Result automaticPhoto(@PathVariable @Pattern(regexp="[0-9]{1,20}|csv-[a-f0-9]{20}") String id) {

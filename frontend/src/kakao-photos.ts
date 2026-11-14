@@ -42,46 +42,68 @@ export function searchKakaoPlace(place: Place, maps: KakaoMaps, timeoutMs = 8000
   });
 }
 type PhotoResponse = { status: string; place: Place };
-// Serialize browser requests; the server also rate limits collection and persists successful results.
+const needsPhoto = (p: Place) => !p.image || (p.imageSource === 'kakao' && !/^\/api\/places\/photos\/[a-f0-9]{64}$/.test(p.image));
+const photoKey = (p: Place) => JSON.stringify([p.id, p.name, p.address, p.longitude, p.latitude]);
+const withPhoto = (place: Place, photo: Place): Place => ({ ...place, image: photo.image,
+  imageSource: photo.imageSource, imagePage: photo.imagePage, imageCollectedAt: photo.imageCollectedAt });
+
+// Only one lookup/page fetch is active. Abandoned pages never leave a backlog of requests.
 export function createPhotoCollector(find: (p: Place) => Promise<KakaoPlace | null>, request: typeof fetch = fetch, retryMs = 300000) {
-  const cache = new Map<string, { promise: Promise<Place>; expires: number }>();
+  const cache = new Map<string, { photo: Place; expires: number }>();
   let queue = Promise.resolve();
-  return (place: Place): Promise<Place> => {
-    if (place.image || place.id.startsWith('demo-')) return Promise.resolve(place);
-    const key = `${place.id}|${place.name}|${place.address}`;
-    const existing = cache.get(key);
-    if (existing && existing.expires > Date.now()) return existing.promise.then(p => ({ ...place, image: p.image, imageSource: p.imageSource, imagePage: p.imagePage, imageCollectedAt: p.imageCollectedAt }));
-    const entry = { promise: Promise.resolve(place), expires: Infinity };
-    entry.promise = queue.then(async () => {
+  return (place: Place, signal?: AbortSignal): Promise<Place> => {
+    if (!needsPhoto(place) || place.id.startsWith('demo-') || signal?.aborted) return Promise.resolve(place);
+    const key = photoKey(place);
+    const task = queue.then(async () => {
+      if (signal?.aborted) return place;
+      const cached = cache.get(key);
+      if (cached && cached.expires > Date.now()) return withPhoto(place, cached.photo);
+      let result = place;
       try {
-        const automatic = await request(`/api/places/${encodeURIComponent(place.id)}/photo`, {
-          method: 'POST', signal: AbortSignal.timeout(30000),
-        });
-        if (automatic.ok) {
-          const result = await automatic.json() as PhotoResponse;
-          if (result.place?.id === place.id && result.place.image) return { ...place, image: result.place.image,
-            imageSource: result.place.imageSource, imagePage: result.place.imagePage, imageCollectedAt: result.place.imageCollectedAt };
-          if (result.status !== 'search-required') return place;
+        const post = async (path: string, body?: object): Promise<PhotoResponse | null> => {
+          if (signal?.aborted) return null;
+          const timeout = AbortSignal.timeout(30000);
+          const response = await request(`/api/places/${encodeURIComponent(place.id)}/${path}`, {
+            method: 'POST', signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+            ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+          });
+          return response.ok ? await response.json() as PhotoResponse : null;
+        };
+        // The backend checks official images and its persistent cache before any Kakao search.
+        let response = await post('photo');
+        if (response?.status === 'search-required' && !signal?.aborted) {
+          const candidate = await find(place);
+          if (candidate && !signal?.aborted) response = await post('kakao-photo', {
+            id: candidate.id, name: candidate.place_name, roadAddress: candidate.road_address_name || '',
+            lotAddress: candidate.address_name || '', longitude: candidate.x || '', latitude: candidate.y || '',
+          });
         }
-        const candidate = await find(place);
-        if (!candidate) return place;
-        const response = await request(`/api/places/${encodeURIComponent(place.id)}/kakao-photo`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
-          body: JSON.stringify({ id: candidate.id, name: candidate.place_name, roadAddress: candidate.road_address_name || '',
-            lotAddress: candidate.address_name || '', longitude: candidate.x || '', latitude: candidate.y || '' }),
-        });
-        if (!response.ok) return place;
-        const result = await response.json() as PhotoResponse;
-        return result.place?.id === place.id && result.place.image ? { ...place, image: result.place.image,
-          imageSource: result.place.imageSource, imagePage: result.place.imagePage, imageCollectedAt: result.place.imageCollectedAt } : place;
-      } catch { return place; }
-    }).then(result => { entry.expires = Date.now() + (result.image ? 7 * 86400000 : retryMs); return result; });
-    if (cache.size >= 500) {
-      const old = [...cache].find(([, value]) => value.expires !== Infinity);
-      if (old) cache.delete(old[0]);
-    }
-    cache.set(key, entry);
-    queue = entry.promise.then(() => {});
-    return entry.promise;
+        if (response?.place?.id === place.id && response.place.image) result = withPhoto(place, response.place);
+      } catch { /* A failed photo must not prevent browsing the rest of the page. */ }
+      if (!signal?.aborted) {
+        if (cache.size >= 500) cache.delete(cache.keys().next().value!);
+        cache.set(key, { photo: result, expires: Date.now() + (!needsPhoto(result) ? 7 * 86400000 : retryMs) });
+      }
+      return result;
+    });
+    queue = task.then(() => {}, () => {});
+    return task;
   };
+}
+
+export type PhotoCollector = (place: Place, signal?: AbortSignal) => Promise<Place>;
+// A page is at most nine places, including those already carrying official photos.
+export async function collectPhotoPage(places: readonly Place[], collect: PhotoCollector,
+  onPhoto: (place: Place) => void, signal: AbortSignal): Promise<void> {
+  const seen = new Set<string>();
+  for (const place of places.slice(0, 9)) {
+    if (signal.aborted) return;
+    if (!needsPhoto(place) || place.id.startsWith('demo-') || seen.has(place.id)) continue;
+    seen.add(place.id);
+    try {
+      const updated = await collect(place, signal);
+      if (signal.aborted) return;
+      if (updated.id === place.id && updated.image) onPhoto(updated);
+    } catch { /* Continue to the next place if a single lookup fails. */ }
+  }
 }

@@ -17,21 +17,24 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import static kr.co.pettour.Models.*;
 
-/** Permission-based collection of one photo exposed by a public Kakao place page. */
+/** Collects one verified photo from a public Kakao place page. */
 @Service
 public class KakaoPhotoService {
     public record Match(String id, String name, String roadAddress, String lotAddress, String longitude, String latitude) {}
     public record Result(String status, Place place) {}
-    public record Photo(String placeId, String fingerprint, String image, String page, String collectedAt) {}
+    public record Photo(String placeId, String fingerprint, String image, String page, String collectedAt, String category) {}
     @FunctionalInterface interface PageFetcher { String fetch(String id) throws IOException; }
+    @FunctionalInterface interface GalleryFetcher { String fetch(String id, String category) throws IOException; }
     private static final Duration TTL = Duration.ofDays(7);
     private final Map<String, Photo> photos = new ConcurrentHashMap<>();
     private final Map<String, Instant> misses = new ConcurrentHashMap<>();
     private final ObjectMapper mapper;
     private final Path file;
+    private final KakaoPhotoFiles files;
     private final boolean enabled;
     private final long interval;
     private final PageFetcher fetcher;
+    private final GalleryFetcher gallery;
     private long nextRequest;
 
     @Autowired
@@ -45,9 +48,26 @@ public class KakaoPhotoService {
                 .timeout(8000).maxBodySize(524288).followRedirects(false).ignoreHttpErrors(true).execute();
             if (response.statusCode() != 200) throw new IOException("Place page unavailable");
             return response.body();
-        });
+        }, KakaoPhotoService::fetchGallery);
+    }
+    private static String fetchGallery(String id, String category) throws IOException {
+        var response = Jsoup.connect("https://place.map.kakao.com/places/tab/photos/" + id + "?tag=" + category + "&page=1")
+            .userAgent("PetTourPhotoCollector/1.0").referrer("https://place.map.kakao.com/" + id)
+            .timeout(8000).maxBodySize(524288).followRedirects(false).ignoreHttpErrors(true).ignoreContentType(true).execute();
+        if (response.statusCode() != 200) throw new IOException("Place gallery unavailable");
+        return response.body();
     }
     KakaoPhotoService(ObjectMapper mapper, Path file, boolean enabled, long interval, PageFetcher fetcher) {
+        this(mapper, file, enabled, interval, fetcher, KakaoPhotoService::fetchGallery);
+    }
+    KakaoPhotoService(ObjectMapper mapper, Path file, boolean enabled, long interval, PageFetcher fetcher, GalleryFetcher gallery) {
+        this(mapper, file, enabled, interval, fetcher, new KakaoPhotoFiles(file.toAbsolutePath().resolveSibling("kakao-photo-files")), gallery);
+    }
+    KakaoPhotoService(ObjectMapper mapper, Path file, boolean enabled, long interval, PageFetcher fetcher, KakaoPhotoFiles files) {
+        this(mapper, file, enabled, interval, fetcher, files, KakaoPhotoService::fetchGallery);
+    }
+    KakaoPhotoService(ObjectMapper mapper, Path file, boolean enabled, long interval, PageFetcher fetcher, KakaoPhotoFiles files, GalleryFetcher gallery) {
+        this.gallery = gallery; this.files = files;
         this.mapper = mapper; this.file = file; this.enabled = enabled; this.interval = Math.max(0, interval); this.fetcher = fetcher;
         if (Files.exists(file)) {
             try {
@@ -60,7 +80,8 @@ public class KakaoPhotoService {
     public Place cached(Place place) {
         if (!enabled || !place.image().isBlank()) return place;
         var photo = photos.get(place.id());
-        return photo != null && fingerprint(place).equals(photo.fingerprint()) && fresh(photo) ? withPhoto(place, photo) : place;
+        return photo != null && ("OUTDOOR".equals(photo.category()) || "INDOOR".equals(photo.category())) &&
+            fingerprint(place).equals(photo.fingerprint()) && fresh(photo) ? withPhoto(place, photo) : place;
     }
     boolean enabled() { return enabled; }
     public synchronized Result collect(Place place, Match match) {
@@ -75,20 +96,44 @@ public class KakaoPhotoService {
             long wait = nextRequest - System.currentTimeMillis();
             if (wait > 0) Thread.sleep(wait);
             nextRequest = System.currentTimeMillis() + interval;
-            var photo = parse(place, match, fetcher.fetch(match.id()));
-            if (photo.isEmpty()) {
+            var verified = parse(place, match, fetcher.fetch(match.id()));
+            if (verified.isEmpty()) {
                 rememberMiss(key, Duration.ofHours(6));
                 return new Result("unavailable", place);
             }
-            photos.put(place.id(), photo.get());
+            Photo photo = null;
+            for (String category : List.of("INDOOR", "OUTDOOR")) {
+                try {
+                    photo = galleryPhoto(place, match, verified.get().page(), category, gallery.fetch(match.id(), category));
+                    if (photo != null) { files.save(photo.image()); break; }
+                } catch (IOException | RuntimeException ignored) { photo = null; }
+            }
+            if (photo == null) { rememberMiss(key, Duration.ofHours(6)); return new Result("unavailable", place); }
+            photos.put(place.id(), photo);
             try { persist(); } catch (IOException ignored) { /* The in-memory copy is still usable. */ }
-            return new Result("collected", withPhoto(place, photo.get()));
+            return new Result("collected", withPhoto(place, photo));
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
         } catch (IOException | RuntimeException ignored) {
             rememberMiss(key, Duration.ofMinutes(5));
         }
         return new Result("unavailable", place);
+    }
+    // The URL is derived from verified metadata, never from a caller-supplied remote URL.
+    public synchronized KakaoPhotoFiles.Asset asset(String key) throws IOException {
+        if (!enabled || key == null || !key.matches("[a-f0-9]{64}")) throw new IOException("Photo unavailable");
+        var photo = photos.values().stream().filter(p -> fresh(p) && KakaoPhotoFiles.key(p.image()).equals(key))
+            .findFirst().orElseThrow(() -> new IOException("Photo unavailable"));
+        String missKey = "asset:" + key;
+        if (misses.getOrDefault(missKey, Instant.MIN).isAfter(Instant.now())) throw new IOException("Photo unavailable");
+        try {
+            // Existing URL-only caches are migrated lazily when their image is displayed.
+            files.save(photo.image());
+            return files.read(photo.image());
+        } catch (IOException ex) {
+            rememberMiss(missKey, Duration.ofMinutes(5));
+            throw ex;
+        }
     }
     private void rememberMiss(String key, Duration duration) {
         if (misses.size() > 2000) misses.entrySet().removeIf(e -> e.getValue().isBefore(Instant.now()));
@@ -107,7 +152,20 @@ public class KakaoPhotoService {
         if (!addressMatch && !mapCoordinateMatches(document, match)) return Optional.empty();
         String image = meta(document, "og:image");
         if (image.startsWith("//")) image = "https:" + image;
-        return validImage(image) ? Optional.of(new Photo(place.id(), fingerprint(place), image, page, Instant.now().toString())) : Optional.empty();
+        return Optional.of(new Photo(place.id(), fingerprint(place), image, page, Instant.now().toString(), "UNCLASSIFIED"));
+    }
+    private Photo galleryPhoto(Place place, Match match, String page, String category, String json) {
+        var data = mapper.readTree(json);
+        if (!category.equals(data.path("request").path("tag").asString()) ||
+            data.path("request").path("page").asInt() != 1 ||
+            !name(data.path("place_name").asString("" )).equals(name(match.name()))) return null;
+        for (var item : data.path("photos")) {
+            if (!match.id().equals(item.path("confirm_id").asString())) continue;
+            String image = item.path("url").asString("");
+            if (image.startsWith("http://")) image = "https://" + image.substring(7);
+            if (validImage(image)) return new Photo(place.id(), fingerprint(place), image, page, Instant.now().toString(), category);
+        }
+        return null;
     }
     private static String meta(Document d, String key) {
         var node = d.selectFirst("meta[property=\"" + key + "\"],meta[name=\"" + key + "\"]");
@@ -175,7 +233,7 @@ public class KakaoPhotoService {
         } catch (java.security.NoSuchAlgorithmException ex) { throw new IllegalStateException(ex); }
     }
     private static Place withPhoto(Place p, Photo photo) {
-        return new Place(p.id(), p.name(), p.category(), p.address(), photo.image(), p.phone(), p.longitude(), p.latitude(),
+        return new Place(p.id(), p.name(), p.category(), p.address(), "/api/places/photos/" + KakaoPhotoFiles.key(photo.image()), p.phone(), p.longitude(), p.latitude(),
             p.modified(), p.source(), "kakao", photo.page(), photo.collectedAt());
     }
     private void persist() throws IOException {
