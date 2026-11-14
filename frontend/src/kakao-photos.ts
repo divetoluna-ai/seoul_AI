@@ -54,6 +54,15 @@ export function createPhotoCollector(find: (p: Place) => Promise<KakaoPlace | nu
     const entry = { promise: Promise.resolve(place), expires: Infinity };
     entry.promise = queue.then(async () => {
       try {
+        const automatic = await request(`/api/places/${encodeURIComponent(place.id)}/photo`, {
+          method: 'POST', signal: AbortSignal.timeout(30000),
+        });
+        if (automatic.ok) {
+          const result = await automatic.json() as PhotoResponse;
+          if (result.place?.id === place.id && result.place.image) return { ...place, image: result.place.image,
+            imageSource: result.place.imageSource, imagePage: result.place.imagePage, imageCollectedAt: result.place.imageCollectedAt };
+          if (result.status !== 'search-required') return place;
+        }
         const candidate = await find(place);
         if (!candidate) return place;
         const response = await request(`/api/places/${encodeURIComponent(place.id)}/kakao-photo`, {

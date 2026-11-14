@@ -36,6 +36,7 @@ test('registry search uses the map province name and omits building details', as
 test('deduplicates photo requests, preserves source data, and caches failures', async () => {
   let lookups = 0, requests = 0;
   const collect = createPhotoCollector(async () => { lookups++; return candidate; }, async (url, options) => {
+    if (url.endsWith('/photo')) return { ok: true, json: async () => ({ status: 'search-required', place }) };
     requests++;
     assert.equal(url, `/api/places/${place.id}/kakao-photo`);
     assert.equal(JSON.parse(options.body).id, candidate.id);
@@ -68,4 +69,23 @@ test('credits Kakao separately from the dataset and links only to a validated pl
   assert.equal(photoPage(photo), photo.imagePage);
   assert.equal(photoPage({ ...photo, imagePage: 'javascript:alert(1)' }), undefined);
   assert.equal(photoPage({ ...photo, imagePage: 'https://place.map.kakao.com.evil.test/123' }), undefined);
+});
+
+test('server checks public photos before Kakao and does not require the browser map SDK', async () => {
+  const official = { ...place, image: 'https://tong.visitkorea.or.kr/official.jpg', imageSource: 'tourapi' };
+  let calls = 0;
+  const collect = createPhotoCollector(async () => { assert.fail('Do not load the map SDK when the server resolved a photo'); }, async (url, options) => {
+    calls++; assert.equal(url, `/api/places/${place.id}/photo`); assert.equal(options.method, 'POST');
+    return { ok: true, json: async () => ({ status: 'available', place: official }) };
+  });
+  const result = await collect(place);
+  assert.equal(result.image, official.image); assert.equal(result.imageSource, 'tourapi');
+  assert.equal((await collect(place)).image, official.image); assert.equal(calls, 1);
+});
+
+test('server-collected Kakao photos retain provenance and ambiguous matches stay blank', async () => {
+  const collect = createPhotoCollector(async () => { assert.fail('Server resolved the lookup'); }, async () => ({ ok: true, json: async () => ({ status: 'collected', place: photo }) }));
+  assert.equal((await collect(place)).imagePage, photo.imagePage);
+  const unmatched = createPhotoCollector(async () => { assert.fail('Do not repeat ambiguous searches'); }, async () => ({ ok: true, json: async () => ({ status: 'unmatched', place }) }));
+  assert.equal((await unmatched(place)).image, '');
 });
