@@ -1,0 +1,588 @@
+{
+  "accounts": [
+    {
+      "tokenHash": "",
+      "profile": {
+        "id": "84a49429-13ff-47e4-a793-3ff87433c801",
+        "nickname": "산책 정렬 시연",
+        "petName": ""
+      }
+    }
+  ],
+  "courses": [
+    {
+      "id": "227b79e7-2ad6-42e2-9193-586c9e8db252",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "북서울꿈의숲 놀이터 가는 길",
+      "content": "북서울꿈의숲에서 반려견 놀이터까지 짧게 걷는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-71322c4f7e7d1dcb9b19",
+          "name": "북서울꿈의숲",
+          "category": "attraction",
+          "address": "서울특별시 강북구 월계로 173",
+          "longitude": "127.044325",
+          "latitude": "37.62025446",
+          "phone": "02-2289-4001",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-8800222823a2a08088bb",
+          "name": "북서울꿈의숲 반려견 놀이터",
+          "category": "attraction",
+          "address": "서울특별시 강북구 월계로 173 (번동)",
+          "longitude": "127.044304732036",
+          "latitude": "37.6231154613023",
+          "phone": "02-901-6463",
+          "modified": "",
+          "source": "supplemental",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:44:50.586Z",
+      "updatedAt": "2026-11-14T10:44:50.586Z",
+      "likes": [],
+      "walk": {
+        "minutes": 12,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "266ce135-9c16-430a-87ce-1d8d553a0e0e",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "우이천에서 초안산까지",
+      "content": "우이천 벚꽃길을 따라 걷다가 초안산근린공원 반려견 놀이터에 들르는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-60263042c5a49ba0604b",
+          "name": "우이천 벚꽃길 산책로",
+          "category": "attraction",
+          "address": "서울특별시 도봉구 우이천로20길 7",
+          "longitude": "127.034772",
+          "latitude": "37.64173321",
+          "phone": "02-901-6944",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-063f357577e0a827ce88",
+          "name": "초안산근린공원 반려견 놀이터",
+          "category": "attraction",
+          "address": "서울특별시 도봉구 해등로3길 48-11 (초안산근린공원)",
+          "longitude": "127.040684128711",
+          "latitude": "37.6475540352509",
+          "phone": "02-2091-4474",
+          "modified": "",
+          "source": "supplemental",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:44:50.586Z",
+      "updatedAt": "2026-11-14T10:44:50.586Z",
+      "likes": [],
+      "walk": {
+        "minutes": 24,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "3c6a9abd-7e0a-4d2a-824a-c2adf59cc3ca",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "양재천과 매헌시민의숲",
+      "content": "양재천근린공원에서 출발해 매헌시민의숲을 지나 반려견 놀이터에서 마무리하는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-f98caaf4836cd40519cc",
+          "name": "양재천근린공원",
+          "category": "attraction",
+          "address": "서울특별시 서초구 양재동 261-23",
+          "longitude": "127.041508",
+          "latitude": "37.47662396",
+          "phone": "02-2155-6896",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-283e29f475532a08ff0e",
+          "name": "매헌시민의숲",
+          "category": "attraction",
+          "address": "서울특별시 서초구 매헌로 99",
+          "longitude": "127.036977",
+          "latitude": "37.4730498",
+          "phone": "02-575-3895",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-5cee8ae5388f78c673f1",
+          "name": "매헌시민의숲 반려견 놀이터",
+          "category": "attraction",
+          "address": "서울특별시 서초구 매헌로99 (양재천교 인근)",
+          "longitude": "127.033377084936",
+          "latitude": "37.4711498033959",
+          "phone": "02-2133-7650",
+          "modified": "",
+          "source": "supplemental",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:44:50.586Z",
+      "updatedAt": "2026-11-14T10:44:50.586Z",
+      "likes": [],
+      "walk": {
+        "minutes": 30,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "06bbd56c-c174-4d74-ab51-7564b13452a6",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "평화의 공원에서 난지천까지",
+      "content": "평화의 공원, 하늘공원, 난지천공원 순서로 이어 걷는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-8132c54c0ac9fec3106f",
+          "name": "평화의 공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 증산로 32",
+          "longitude": "126.892347",
+          "latitude": "37.56410596",
+          "phone": "02-300-5576",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-d2cc832ffd3921356df9",
+          "name": "하늘공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 하늘공원로 95",
+          "longitude": "126.886318",
+          "latitude": "37.56907948",
+          "phone": "02-300-5501",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-2686d10252c51525d473",
+          "name": "난지천공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 월드컵로 365",
+          "longitude": "126.887048",
+          "latitude": "37.57246315",
+          "phone": "02-2236-9134",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:44:50.586Z",
+      "updatedAt": "2026-11-14T10:44:50.586Z",
+      "likes": [],
+      "walk": {
+        "minutes": 39,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "de0d1d75-24d6-463f-b8ea-e65370286b98",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "월드컵공원과 난지천 공원길",
+      "content": "월드컵공원에서 시작해 난지천공원과 하늘공원을 거쳐 평화의 공원까지 여유 있게 걷는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-c8a915adbd81863db3cd",
+          "name": "월드컵공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 하늘공원로 86",
+          "longitude": "126.881674",
+          "latitude": "37.57159797",
+          "phone": "02-300-5500",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-2686d10252c51525d473",
+          "name": "난지천공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 월드컵로 365",
+          "longitude": "126.887048",
+          "latitude": "37.57246315",
+          "phone": "02-2236-9134",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-d2cc832ffd3921356df9",
+          "name": "하늘공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 하늘공원로 95",
+          "longitude": "126.886318",
+          "latitude": "37.56907948",
+          "phone": "02-300-5501",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-8132c54c0ac9fec3106f",
+          "name": "평화의 공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 증산로 32",
+          "longitude": "126.892347",
+          "latitude": "37.56410596",
+          "phone": "02-300-5576",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:44:50.586Z",
+      "updatedAt": "2026-11-14T10:44:50.586Z",
+      "likes": [],
+      "walk": {
+        "minutes": 55,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "6f888d74-8181-48c3-9ac8-4d08d67dce1c",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "초안산 숲길과 놀이터 한 바퀴",
+      "content": "초안산생태공원 숲길을 둘러본 뒤 초안산근린공원 반려견 놀이터에서 마무리하는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-bfd3954a1678b709267a",
+          "name": "초안산생태공원",
+          "category": "attraction",
+          "address": "서울특별시 도봉구 창동 산 158",
+          "longitude": "127.045951",
+          "latitude": "37.64717178",
+          "phone": "02-2091-3765",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-bf1644a5651b5b7e314e",
+          "name": "초안산근린공원 반려견 놀이터",
+          "category": "attraction",
+          "address": "서울특별시 도봉구 창동 산 137-6",
+          "longitude": "127.043146",
+          "latitude": "37.64529446",
+          "phone": "02-906-7979",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:47:40.074Z",
+      "updatedAt": "2026-11-14T10:47:40.074Z",
+      "likes": [],
+      "walk": {
+        "minutes": 18,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "00f855fc-26ee-44f6-9ea8-ea15b894fa19",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "문화비축기지에서 난지천으로",
+      "content": "문화비축기지를 출발해 난지천공원까지 여유롭게 이어 걷는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-4b6ae85c5c86e14a6d4a",
+          "name": "문화비축기지",
+          "category": "attraction",
+          "address": "서울특별시 마포구 증산로 87",
+          "longitude": "126.895031",
+          "latitude": "37.57034669",
+          "phone": "02-376-8410",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-2686d10252c51525d473",
+          "name": "난지천공원",
+          "category": "attraction",
+          "address": "서울특별시 마포구 월드컵로 365",
+          "longitude": "126.887048",
+          "latitude": "37.57246315",
+          "phone": "02-2236-9134",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:47:40.074Z",
+      "updatedAt": "2026-11-14T10:47:40.074Z",
+      "likes": [],
+      "walk": {
+        "minutes": 27,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "ff4c0510-99b2-480c-833c-2fe3632b9ea0",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "광진 놀이터에서 아차산까지",
+      "content": "어린이대공원 반려견 놀이터에서 출발해 아차산생태공원까지 걷는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-d2b32efe663837c0f829",
+          "name": "어린이대공원 반려견 놀이터",
+          "category": "attraction",
+          "address": "서울특별시 광진구 능동로 216(구의문주차장 옆)",
+          "longitude": "127.084563",
+          "latitude": "37.546099",
+          "phone": "02-2133-7650",
+          "modified": "",
+          "source": "supplemental",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-bd7cfc13975fa81624b1",
+          "name": "아차산생태공원",
+          "category": "attraction",
+          "address": "서울특별시 광진구 워커힐로 127",
+          "longitude": "127.101246",
+          "latitude": "37.55189708",
+          "phone": "02-450-1192",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:47:40.074Z",
+      "updatedAt": "2026-11-14T10:47:40.074Z",
+      "likes": [],
+      "walk": {
+        "minutes": 35,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "0eb6cff5-048f-4b16-ad7e-c4b5abc79c9b",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "송파 공원과 고분길 산책",
+      "content": "올림픽공원에서 방이동고분군을 거쳐 오금근린공원까지 이어지는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-70e7dc32260fe068eb4f",
+          "name": "올림픽공원",
+          "category": "attraction",
+          "address": "서울특별시 송파구 올림픽로 424",
+          "longitude": "127.115518",
+          "latitude": "37.5203397",
+          "phone": "02-410-1114",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-6f8514d0eda4615c13cb",
+          "name": "방이동고분군",
+          "category": "attraction",
+          "address": "서울특별시 송파구 오금로 227",
+          "longitude": "127.118957",
+          "latitude": "37.50712613",
+          "phone": "02-2147-2800",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-4e6d3702146b3be03d54",
+          "name": "오금근린공원",
+          "category": "attraction",
+          "address": "서울특별시 송파구 오금로 363",
+          "longitude": "127.131653",
+          "latitude": "37.50519118",
+          "phone": "02-2147-3380",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:47:40.074Z",
+      "updatedAt": "2026-11-14T10:47:40.074Z",
+      "likes": [],
+      "walk": {
+        "minutes": 45,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    },
+    {
+      "id": "111ac8c3-c9cb-40c3-b983-30ba58f169ea",
+      "authorId": "84a49429-13ff-47e4-a793-3ff87433c801",
+      "title": "남산 한옥마을과 초록길",
+      "content": "남산골한옥마을에서 남산공원을 지나 남산야외식물원까지 둘러보는 코스. 예상 시간은 정렬 시연을 위한 예시입니다.",
+      "region": "11",
+      "stops": [
+        {
+          "id": "csv-dd9fb1a00f466322b372",
+          "name": "남산골한옥마을",
+          "category": "attraction",
+          "address": "서울특별시 중구 퇴계로34길 28",
+          "longitude": "126.994739",
+          "latitude": "37.55954227",
+          "phone": "02-2261-0517",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-4a907731ff60bcd37d91",
+          "name": "남산공원",
+          "category": "attraction",
+          "address": "서울특별시 중구 회현동1가",
+          "longitude": "126.981204",
+          "latitude": "37.55558921",
+          "phone": "02-3783-5900",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        },
+        {
+          "id": "csv-396fe4dcc8989be26b16",
+          "name": "남산야외식물원",
+          "category": "attraction",
+          "address": "서울특별시 용산구 이태원동 259-16",
+          "longitude": "126.994588",
+          "latitude": "37.54297029",
+          "phone": "02-798-3771",
+          "modified": "2022-11-30",
+          "source": "csv",
+          "image": "",
+          "imageSource": "",
+          "imagePage": "",
+          "imageCollectedAt": ""
+        }
+      ],
+      "createdAt": "2026-11-14T10:47:40.074Z",
+      "updatedAt": "2026-11-14T10:47:40.074Z",
+      "likes": [],
+      "walk": {
+        "minutes": 60,
+        "stairs": null,
+        "shade": null,
+        "quiet": null
+      }
+    }
+  ],
+  "points": [],
+  "shares": [],
+  "nfcDays": [],
+  "nfcSessions": []
+}
