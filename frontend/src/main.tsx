@@ -4,6 +4,7 @@ import { ArrowDown, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, C
 import { api, loadSaved, sourceLabel, photosFirst, photoCredit, photoPage, updatedDate, categoryLabels, categoryLabel, type Detail, type Place, type PlacesResponse, type Region } from './lib';
 import './styles.css';
 import AccountMenu from './AccountMenu';
+import type { DogProfile } from './dog-profiles';
 import Community from './Community';
 import PointShop from './PointShop';
 import { isCommunityHash } from './community-api';
@@ -23,6 +24,7 @@ function App() {
   const [shop, setShop] = useState(window.location.hash === '#shop');
   useEffect(() => { const sync = () => setShop(window.location.hash === '#shop'); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, []);
   const [community, setCommunity] = useState(isCommunityHash(window.location.hash));
+  const [dogs, setDogs] = useState<DogProfile[] | null>(null);
   useEffect(() => { const sync = () => setCommunity(isCommunityHash(window.location.hash)); window.addEventListener('hashchange', sync); return () => window.removeEventListener('hashchange', sync); }, []);
   const [shareRequest, setShareRequest] = useState(0);
   const [regions, setRegions] = useState<Region[]>([]);
@@ -191,11 +193,11 @@ function App() {
       <nav className="community-nav" aria-label="주 메뉴"><button className={!community && !shop && !savedView ? 'nav active' : 'nav'} onClick={() => { setCommunity(false); setSavedView(false); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}>장소 둘러보기</button><button className={community ? 'nav active' : 'nav'} onClick={() => { setCommunity(true); window.location.hash = 'community'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>코스 공유</button><button className={shop ? 'nav active' : 'nav'} onClick={() => { window.location.hash = 'shop'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>포인트 상점</button><button className="nav" onClick={() => setGuide(true)}>동반 가이드</button></nav>
       <div className="header-actions">
         <button className={`saved-button ${savedView && !community ? 'selected' : ''}`} onClick={() => { setCommunity(false); setSavedView(community || !savedView); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}><Heart size={17}/> 저장한 장소 <span>{saved.length}</span></button>
-        <AccountMenu />
+        <AccountMenu dogs={dogs} onDogsChange={setDogs}/>
       </div>
     </div></header>
     {shop && <PointShop/>}
-    {community && !shop && <Community regions={regions} tripStops={tripStops} initialRegion={region} shareRequest={shareRequest} onShareHandled={() => setShareRequest(0)} onImportCourse={importCourse} onBrowse={browseFromCommunity}/>}
+    {community && !shop && <Community regions={regions} tripStops={tripStops} initialRegion={region} shareRequest={shareRequest} onShareHandled={() => setShareRequest(0)} onImportCourse={importCourse} onBrowse={browseFromCommunity} dogs={dogs}/>}
     <main hidden={community || shop}>
       <section className="hero"><div className="container hero-inner">
         <div className="hero-copy"><div className="eyebrow"><span/> OUR LITTLE ADVENTURE</div><h1>좋은 곳엔,<br/>언제나 <span>함께 가개.</span></h1><p>초록빛 산책길부터, 하룻밤 쉬어갈 숙소까지.<br/>우리 아이와 함께할 다음 장소를 찾아보세요.</p><button className="hero-cta" onClick={scrollResults}>우리만의 여행 코스 만들기 <ArrowDown size={17}/></button><div className="hero-footnote"><ShieldCheck size={15}/> 한국관광공사 · 한국문화정보원 공공데이터 활용</div></div>

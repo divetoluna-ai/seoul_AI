@@ -25,7 +25,7 @@ class AuthSessionStore {
 
     record Attempt(String token, String state, String verifier, String section) {}
     record StoredAttempt(String tokenHash, String stateHash, String verifier, String section, long expiresAt) {}
-    record Session(String tokenHash, String memberId, long expiresAt) {}
+    record Session(String tokenHash, String memberId, long expiresAt, Boolean dogSetupPending) {}
     record Snapshot(List<StoredAttempt> attempts, List<Session> sessions) {}
 
     private final ObjectMapper mapper;
@@ -45,7 +45,7 @@ class AuthSessionStore {
         db = Files.exists(file) ? mapper.readValue(Files.readString(file), Snapshot.class) : new Snapshot(List.of(), List.of());
         if (db == null || db.attempts() == null || db.sessions() == null
                 || db.attempts().stream().anyMatch(a -> a == null || !digest(a.tokenHash()) || !digest(a.stateHash())
-                    || !token(a.verifier()) || a.section() == null || !Set.of("", "community", "explore").contains(a.section()) || a.expiresAt() <= 0)
+                    || !token(a.verifier()) || a.section() == null || !destination(a.section()).equals(a.section()) || a.expiresAt() <= 0)
                 || db.sessions().stream().anyMatch(s -> s == null || !digest(s.tokenHash()) || s.memberId() == null
                     || s.memberId().isBlank() || s.expiresAt() <= 0))
             throw new IOException("Invalid authentication session store");
@@ -76,20 +76,46 @@ class AuthSessionStore {
     }
 
     synchronized String memberId(String browserToken) {
+        var session = find(browserToken);
+        return session == null ? null : session.memberId();
+    }
+
+    synchronized Session find(String browserToken) {
         if (!token(browserToken)) return null;
         String tokenHash = hash(browserToken);
         return db.sessions().stream().filter(s -> s.tokenHash().equals(tokenHash) && s.expiresAt() > clock.millis())
-                .map(Session::memberId).findFirst().orElse(null);
+                .findFirst().orElse(null);
     }
 
     synchronized String signIn(String memberId) {
+        return signIn(memberId, false);
+    }
+
+    synchronized String signIn(String memberId, boolean dogSetupPending) {
         if (memberId == null || memberId.isBlank()) throw new IllegalArgumentException("Member is required");
         long now = clock.millis();
         String browserToken = randomValue();
         var sessions = new ArrayList<>(liveSessions(now));
-        sessions.add(new Session(hash(browserToken), memberId, now + SESSION_TIMEOUT.toMillis()));
+        sessions.add(new Session(hash(browserToken), memberId, now + SESSION_TIMEOUT.toMillis(), dogSetupPending));
         persist(new Snapshot(db.attempts().stream().filter(a -> a.expiresAt() > now).toList(), sessions));
         return browserToken;
+    }
+
+    synchronized void completeDogSetup(String browserToken) {
+        var session = find(browserToken);
+        if (session == null || !Boolean.TRUE.equals(session.dogSetupPending())) return;
+        long now = clock.millis();
+        var sessions = liveSessions(now).stream().map(item -> item.equals(session)
+                ? new Session(item.tokenHash(), item.memberId(), item.expiresAt(), false) : item).toList();
+        persist(new Snapshot(db.attempts().stream().filter(a -> a.expiresAt() > now).toList(), sessions));
+    }
+
+    static String destination(String section) {
+        return switch (section) {
+            case "community", "explore", "shop", "dogs", "community/dogs" -> section;
+            case String value when value.matches("community/course/[a-f0-9-]{36}") -> value;
+            default -> "";
+        };
     }
 
     synchronized void revoke(String browserToken) {

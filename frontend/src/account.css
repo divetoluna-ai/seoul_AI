@@ -89,6 +89,45 @@
   height: auto;
 }
 
+.dog-profiles {
+  margin-top: 18px;
+}
+
+.dog-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.dog-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dog-list li div { flex: 1; min-width: 100px; overflow-wrap: anywhere; }
+.dog-list small { display: block; margin-top: 3px; color: #53675a; }
+.course-form.dog-form { padding: 0; }
+.dog-form fieldset, .walk-conditions fieldset {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.dog-form legend, .walk-conditions legend { font-size: 13px; font-weight: 700; }
+.course-form label.dog-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.course-form .dog-check input { width: auto; accent-color: var(--green); }
+.dog-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 @media (max-width: 620px) {
   .header-actions { gap: 5px; }
   .account-trigger { padding: 8px; font-size: 11px; gap: 4px; max-width: 100px; }

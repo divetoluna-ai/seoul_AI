@@ -12,7 +12,13 @@ import static kr.co.pettour.CommunityService.*;
 @RequestMapping("/api/community")
 public class CommunityController {
     private final CommunityService service;
-    public CommunityController(CommunityService service) { this.service = service; }
+    private final AuthController auth;
+    private final MemberStore members;
+    CommunityController(CommunityService service, AuthController auth, MemberStore members) {
+        this.service = service;
+        this.auth = auth;
+        this.members = members;
+    }
     public record FlagInput(boolean enabled) {}
 
     @ModelAttribute
@@ -33,9 +39,11 @@ public class CommunityController {
         return profile;
     }
     @GetMapping("/courses") public Feed courses(@CookieValue(name="daeng-community", required=false) String token,
-        @RequestParam(defaultValue="") String region, @RequestParam(defaultValue="") String keyword,
-        @RequestParam(defaultValue="recent") String sort, @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="false") boolean mine) {
-        return service.feed(token, region, keyword, sort, page, mine);
+        @RequestParam(defaultValue="") String region, @RequestParam(defaultValue="") String keyword, @RequestParam(defaultValue="") String dog,
+        @RequestParam(defaultValue="recent") String sort, @RequestParam(defaultValue="1") int page, @RequestParam(defaultValue="false") boolean mine,
+        HttpServletRequest request) {
+        var preferences = dog.isEmpty() ? null : members.dog(auth.requireMember(request), dog);
+        return service.feed(token, region, keyword, sort, page, mine, preferences);
     }
     @GetMapping("/courses/{id}") public CourseView detail(@CookieValue(name="daeng-community", required=false) String token, @PathVariable String id) { return service.detail(token, id); }
     @PostMapping(value="/courses", consumes=MediaType.APPLICATION_JSON_VALUE) @ResponseStatus(HttpStatus.CREATED)
