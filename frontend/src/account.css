@@ -1,0 +1,96 @@
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.header-actions .saved-button {
+  white-space: nowrap;
+}
+
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 120px;
+  border-radius: 8px;
+  background: #e9eee5;
+  color: var(--green);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-trigger svg {
+  flex-shrink: 0;
+}
+
+.account-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  box-sizing: border-box;
+  height: fit-content;
+  width: min(420px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  padding: 30px;
+  background: #fffefa;
+  color: #263d31;
+  box-shadow: 0 20px 100px #152d3340;
+}
+
+.account-dialog::backdrop {
+  background: #102a2299;
+  backdrop-filter: blur(4px);
+}
+
+.account-dialog h2 {
+  margin: 0 24px 12px 0;
+  font-size: 22px;
+}
+
+.account-dialog p {
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.account-dialog .account-feedback {
+  margin: 0 0 10px;
+  color: #984729;
+}
+
+.account-dialog .secondary-button,
+.kakao-login-link {
+  margin-top: 20px;
+}
+
+.kakao-login-link {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.kakao-login-link img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 620px) {
+  .header-actions { gap: 5px; }
+  .account-trigger { padding: 8px; font-size: 11px; gap: 4px; max-width: 100px; }
+  .account-trigger svg { width: 14px; }
+}

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ArrowDown, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Coffee, Dog, ExternalLink, Heart, Info, Leaf, LoaderCircle, MapPin, PawPrint, RotateCcw, Search, ShieldCheck, SlidersHorizontal, X, Mountain, Landmark, PartyPopper, Route, Bike, BedDouble, ShoppingBag, Scissors } from 'lucide-react';
 import { api, loadSaved, sourceLabel, photosFirst, photoCredit, photoPage, updatedDate, categoryLabels, categoryLabel, type Detail, type Place, type PlacesResponse, type Region } from './lib';
 import './styles.css';
+import AccountMenu from './AccountMenu';
 import Community from './Community';
 import TripPlanner from './TripPlanner';
 import { coordinatesOf, loadTrip, MAX_STOPS, TRIP_STORAGE_KEY } from './trip';
@@ -177,7 +178,10 @@ function App() {
     <header className="header"><div className="container header-inner">
       <a className="brand" href="#" onClick={() => { setCommunity(false); setSavedView(false); }} aria-label="댕댕여지도 홈"><span className="brand-icon"><PawPrint size={23} fill="currentColor"/></span>댕댕여지도<span className="brand-dot">.</span></a>
       <nav className="community-nav" aria-label="주 메뉴"><button className={!community && !savedView ? 'nav active' : 'nav'} onClick={() => { setCommunity(false); setSavedView(false); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}>장소 둘러보기</button><button className={community ? 'nav active' : 'nav'} onClick={() => { setCommunity(true); window.location.hash = 'community'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>커뮤니티</button><button className="nav" onClick={() => setGuide(true)}>동반 가이드</button></nav>
-      <button className={`saved-button ${savedView && !community ? 'selected' : ''}`} onClick={() => { setCommunity(false); setSavedView(community || !savedView); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}><Heart size={17}/> 저장한 장소 <span>{saved.length}</span></button>
+      <div className="header-actions">
+        <button className={`saved-button ${savedView && !community ? 'selected' : ''}`} onClick={() => { setCommunity(false); setSavedView(community || !savedView); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}><Heart size={17}/> 저장한 장소 <span>{saved.length}</span></button>
+        <AccountMenu />
+      </div>
     </div></header>
     {community && <Community regions={regions}/>}
     <main hidden={community}>

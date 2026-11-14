@@ -23,7 +23,11 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname.startsWith('/api/')) {
     const readOnly = /^\/api\/(?:status|regions|districts|tours|places(?:\/(?:[0-9]{1,20}|csv-[a-f0-9]{20}))?)$/.test(url.pathname);
     const identifier = '[a-f0-9-]{36}';
-    const communityRoutes = [
+    const authRoute = url.pathname.startsWith('/api/auth/');
+    const routes = [
+      [/^\/api\/auth\/session$/, ['GET', 'HEAD']],
+      [/^\/api\/auth\/kakao(?:\/callback)?$/, ['GET']],
+      [/^\/api\/auth\/logout$/, ['POST']],
       [/^\/api\/places\/(?:[0-9]{1,20}|csv-[a-f0-9]{20})\/kakao-photo$/, ['POST']],
       [/^\/api\/community\/profile$/, ['GET', 'HEAD', 'POST']],
       [/^\/api\/community\/points$/, ['GET', 'HEAD']],
@@ -41,7 +45,7 @@ const server = http.createServer(async (req, res) => {
       [new RegExp(`^/api/community/conversations/${identifier}$`), ['GET', 'HEAD']],
       [new RegExp(`^/api/community/conversations/${identifier}/messages$`), ['POST']],
     ];
-    const route = communityRoutes.find(([pattern]) => pattern.test(url.pathname));
+    const route = routes.find(([pattern]) => pattern.test(url.pathname));
     if (!readOnly && !route) return fail(res, 404, '경로를 찾을 수 없습니다.');
     const allowed = readOnly ? ['GET', 'HEAD'] : route[1];
     if (!allowed.includes(req.method)) { res.setHeader('Allow', allowed.join(', ')); return fail(res, 405, '지원하지 않는 요청입니다.'); }
@@ -49,12 +53,15 @@ const server = http.createServer(async (req, res) => {
     if (!readOnly) {
       if (req.headers.cookie) headers.Cookie = req.headers.cookie;
       if (req.headers['x-community-client']) headers['X-Community-Client'] = req.headers['x-community-client'];
+      if (authRoute && req.headers['x-auth-client']) headers['X-Auth-Client'] = req.headers['x-auth-client'];
       if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
       if (Number(req.headers['content-length']) > 850000) return fail(res, 413, '사진 또는 글의 용량이 너무 커요.');
     }
     const upstream = http.request({ hostname: '127.0.0.1', port: 8080, path: url.pathname + url.search, method: req.method, headers }, response => {
       const resultHeaders = { 'Content-Type': response.headers['content-type'] || 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
       if (!readOnly && response.headers['set-cookie']) resultHeaders['Set-Cookie'] = response.headers['set-cookie'];
+      if (authRoute && response.headers.location) resultHeaders.Location = response.headers.location;
+      if (authRoute) resultHeaders['Referrer-Policy'] = 'no-referrer';
       res.writeHead(response.statusCode || 502, resultHeaders);
       response.pipe(res);
     });
