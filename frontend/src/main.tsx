@@ -35,7 +35,9 @@ function App() {
   const showShop = shop && loggedIn;
   useEffect(() => {
     const redirectHome = () => {
-      if (authReady && loggedIn && (!window.location.hash || window.location.hash === '#')) window.location.replace('#shop');
+      if (authReady && (!window.location.hash || window.location.hash === '#')) {
+        window.location.replace(loggedIn ? '#shop' : '#explore');
+      }
     };
     redirectHome(); window.addEventListener('hashchange', redirectHome);
     return () => window.removeEventListener('hashchange', redirectHome);
