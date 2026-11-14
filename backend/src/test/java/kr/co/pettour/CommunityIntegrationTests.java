@@ -134,4 +134,72 @@ class CommunityIntegrationTests {
         Path corrupt = folder.resolve("broken.json"); Files.writeString(corrupt, "{broken");
         assertThrows(Exception.class, () -> new CommunityService(mapper, catalog, corrupt.toString())); assertEquals("{broken", Files.readString(corrupt));
     }
+    @Test void nfcSimulationEndpointsRequireSessionAndPersistToggle() throws Exception {
+        var actor = actor();
+        assertEquals(401, call(null, "PUT", "/nfc/proximity", Map.of("enabled", true)).statusCode());
+        assertEquals(401, call(null, "POST", "/nfc/heartbeat", null).statusCode());
+        assertEquals(403, call("PUT", "/nfc/proximity", Map.of("enabled", true), actor.cookie, false).statusCode());
+        var started = ok(actor, "PUT", "/nfc/proximity", Map.of("enabled", true));
+        assertTrue(started.path("nfc").path("active").asBoolean());
+        assertEquals("보리", started.path("nfc").path("petName").asText());
+        assertTrue(ok(actor, "POST", "/nfc/heartbeat", null).path("nfc").path("active").asBoolean());
+        assertFalse(ok(actor, "PUT", "/nfc/proximity", Map.of("enabled", false)).path("nfc").path("active").asBoolean());
+        assertFalse(ok(actor, "GET", "/points", null).path("nfc").path("active").asBoolean());
+    }
+    @Test void sharesRewardOnlyTheirOwnerOnceAndArePubliclyReadable() throws Exception {
+        var owner = actor(); var stranger = actor();
+        var stop = Map.of("id", "csv-test-place", "name", "공원", "address", "서울", "category", "attraction", "latitude", "37.56", "longitude", "126.97");
+        var body = Map.of("stops", List.of(stop));
+        assertEquals(401, call(null, "POST", "/shares", body).statusCode());
+        assertEquals(400, call(owner, "POST", "/shares", Map.of("stops", List.of())).statusCode());
+        var invalid = new HashMap<>(stop); invalid.put("latitude", "NaN");
+        assertEquals(400, call(owner, "POST", "/shares", Map.of("stops", List.of(invalid))).statusCode());
+        String id = ok(owner, "POST", "/shares", body).path("id").asText();
+        assertEquals(0, ok(owner, "GET", "/points", null).path("total").asLong(), "Preparing a link is not a completed share");
+        var shared = ok(null, "GET", "/shares/" + id, null);
+        assertEquals("공원", shared.path("stops").get(0).path("name").asText());
+        assertFalse(shared.has("ownerId")); assertFalse(shared.has("fingerprint"));
+        assertEquals(401, call(null, "PUT", "/shares/" + id + "/complete", null).statusCode());
+        assertEquals(403, call(stranger, "PUT", "/shares/" + id + "/complete", null).statusCode());
+        assertEquals(10, ok(owner, "PUT", "/shares/" + id + "/complete", null).path("awarded").asInt());
+        assertEquals(0, ok(owner, "PUT", "/shares/" + id + "/complete", null).path("awarded").asInt());
+        var renamed = new HashMap<>(stop); renamed.put("name", "이름 변경");
+        assertEquals(id, ok(owner, "POST", "/shares", Map.of("stops", List.of(renamed))).path("id").asText());
+        assertEquals(10, ok(owner, "GET", "/points", null).path("total").asLong());
+        var reloaded = new CommunityService(mapper, catalog, store.toString());
+        String token = owner.cookie.substring(owner.cookie.indexOf('=') + 1);
+        assertEquals(10, reloaded.points(token).total()); assertEquals(0, reloaded.completeShare(token, id).awarded());
+    }
+    @Test void courseLikesAwardOncePerUserAndPersistAcrossProfileEdits() throws Exception {
+        var owner = actor(); var neighbor = actor();
+        String id = ok(owner, "POST", "/courses", course("코스 좋아요 포인트")).path("course").path("id").asText();
+        assertEquals(401, call(null, "GET", "/points", null).statusCode());
+        assertEquals(401, call(null, "PUT", "/courses/" + id + "/like", Map.of("enabled", true)).statusCode());
+        for (boolean enabled : List.of(true, true, false, true))
+            ok(neighbor, "PUT", "/courses/" + id + "/like", Map.of("enabled", enabled));
+        assertEquals(1, ok(neighbor, "GET", "/points", null).path("total").asLong());
+        assertEquals(0, ok(owner, "GET", "/points", null).path("total").asLong());
+        ok(neighbor, "POST", "/profile", Map.of("nickname", neighbor.nickname, "petName", "수정"));
+        var reloaded = new CommunityService(mapper, catalog, store.toString());
+        assertEquals(1, reloaded.points(neighbor.cookie.substring(neighbor.cookie.indexOf('=') + 1)).total());
+    }
+    @Test void preRewardCourseSnapshotsLoadAndFailedActionsRollBackTheirPoints() throws Exception {
+        Path file = Files.createTempDirectory("course-rewards-").resolve("courses.json");
+        var original = new CommunityService(mapper, catalog, file.toString());
+        var profile = original.saveProfile("old-token", new CommunityService.ProfileInput("기존여행자", "보리"));
+        var inputs = places().stream().limit(2).map(p -> new CommunityService.StopInput(p.id(), p.latitude(), p.longitude())).toList();
+        String id = original.create("old-token", new CommunityService.CourseInput("기존 여행 코스", "재시작 후에도 보존하는 코스입니다.", "11", inputs)).course().id();
+        var old = mapper.readValue(Files.readString(file), CommunityService.Snapshot.class);
+        Files.writeString(file, mapper.writeValueAsString(Map.of("accounts", old.accounts(), "courses", old.courses())));
+        var service = new CommunityService(mapper, catalog, file.toString());
+        assertEquals(profile, service.me("old-token")); assertEquals(0, service.points("old-token").total());
+        assertEquals(2, service.detail(null, id).course().stops().size());
+        String share = service.createShare("old-token", new CommunityService.ShareInput(List.of(
+            new CommunityService.SharedPlace("test-place", "공원", "서울", "attraction", "37.56", "126.97")))).id();
+        Files.delete(file); Files.createDirectory(file); Files.writeString(file.resolve("blocker"), "block replacement");
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.like("old-token", id, true));
+        assertEquals(0, service.points("old-token").total()); assertEquals(0, service.detail("old-token", id).likeCount());
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.completeShare("old-token", share));
+        assertEquals(0, service.points("old-token").total());
+    }
 }

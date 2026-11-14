@@ -10,6 +10,7 @@ import { coordinatesOf, loadTrip, MAX_STOPS, TRIP_STORAGE_KEY } from './trip';
 import { locatePlace } from './geocoding';
 import PlaceLocation from './PlaceLocation';
 import PlaceImage from './PlaceImage';
+import { communityApi } from './community-api';
 
 const categoryIcons = { all: PawPrint, attraction: Mountain, culture: Landmark, festival: PartyPopper, course: Route, leisure: Bike, stay: BedDouble, shopping: ShoppingBag, restaurant: Coffee, care: Scissors };
 function CategoryIcon({ category }: { category: string }) {
@@ -38,6 +39,22 @@ function App() {
   const [saved, setSaved] = useState<Place[]>(loadSaved);
   const [savedView, setSavedView] = useState(false);
   const [tripStops, setTripStops] = useState<Place[]>(loadTrip);
+  const [sharedStops, setSharedStops] = useState<Place[] | null>(null);
+  const [sharedError, setSharedError] = useState('');
+  useEffect(() => {
+    let abort: AbortController | undefined;
+    const load = () => {
+      abort?.abort(); abort = new AbortController(); const signal = abort.signal;
+      setSharedStops(null); setSharedError('');
+      const match = /^#trip=([a-f0-9-]{36})$/.exec(window.location.hash);
+      if (!match) return;
+      communityApi<{ stops: Pick<Place, 'id' | 'name' | 'address' | 'category' | 'latitude' | 'longitude'>[] }>(`/shares/${match[1]}`, 'GET', undefined, signal)
+        .then(data => { if (!signal.aborted) setSharedStops(data.stops.map(p => ({ ...p, image: '', phone: '', modified: '' }))); })
+        .catch(e => { if (!signal.aborted) setSharedError((e as Error).message); });
+    };
+    load(); window.addEventListener('hashchange', load);
+    return () => { abort?.abort(); window.removeEventListener('hashchange', load); };
+  }, []);
   const [resolvingTrip, setResolvingTrip] = useState<string[]>([]);
   const pendingTrip = useRef(new Set<string>());
   const tripQueue = useRef<Promise<void>>(Promise.resolve());
@@ -162,6 +179,9 @@ function App() {
   const total = savedView ? saved.length : result?.total || 0;
   const pages = Math.ceil((result?.total || 0) / (result?.pageSize || 9));
   return <>
+    {(sharedStops || sharedError) && <section className="container shared-trip-banner" aria-label="공유받은 여행 코스">
+      {sharedError ? <p role="alert">{sharedError}</p> : sharedStops && <><strong>공유받은 여행 코스 · {sharedStops.length}곳</strong><p>{sharedStops.map(p => p.name).join(' → ')}</p><button className="primary-button" onClick={() => { tripGeneration.current++; setTripStops(sharedStops); setSharedStops(null); window.location.hash = ''; requestAnimationFrame(showTrip); }}>이 코스를 내 지도에서 보기</button></>}
+    </section>}
     <header className="header"><div className="container header-inner">
       <a className="brand" href="#" onClick={() => { setCommunity(false); setSavedView(false); }} aria-label="댕댕여지도 홈"><span className="brand-icon"><PawPrint size={23} fill="currentColor"/></span>댕댕여지도<span className="brand-dot">.</span></a>
       <nav className="community-nav" aria-label="주 메뉴"><button className={!community && !savedView ? 'nav active' : 'nav'} onClick={() => { setCommunity(false); setSavedView(false); window.location.hash = 'explore'; requestAnimationFrame(scrollResults); }}>장소 둘러보기</button><button className={community ? 'nav active' : 'nav'} onClick={() => { setCommunity(true); window.location.hash = 'community'; window.scrollTo({ top: 0, behavior: 'smooth' }); }}>코스 공유</button><button className="nav" onClick={() => setGuide(true)}>동반 가이드</button></nav>

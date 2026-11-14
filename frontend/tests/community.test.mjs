@@ -35,6 +35,10 @@ test('sharing rejects incomplete, duplicate and invalid location lists', () => {
 });
 test('course publishing and deletion use session cookies and the same-origin request header', async () => {
   const original = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  globalThis.window = new EventTarget();
+  let changes = 0;
+  window.addEventListener('community-points-changed', () => changes++);
   const calls = [];
   globalThis.fetch = async (url, options) => { calls.push({ url, options }); return { ok: true, status: options.method === 'DELETE' ? 204 : 201, json: async () => ({ course: { id } }) }; };
   try {
@@ -45,5 +49,9 @@ test('course publishing and deletion use session cookies and the same-origin req
     assert.deepEqual(JSON.parse(calls[0].options.body), body);
     assert.equal(await communityApi(`/courses/${id}`, 'DELETE'), undefined);
     assert.equal(calls[1].url, `/api/community/courses/${id}`);
-  } finally { globalThis.fetch = original; }
+    assert.equal(changes, 2, 'Course changes refresh the rewards panel');
+    await communityApi('/nfc/heartbeat', 'POST');
+    await communityApi('/profile');
+    assert.equal(changes, 2, 'Heartbeats and reads do not trigger reward refresh loops');
+  } finally { globalThis.fetch = original; if (originalWindow === undefined) delete globalThis.window; else globalThis.window = originalWindow; }
 });
